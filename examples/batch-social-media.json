@@ -1,0 +1,37 @@
+{
+  "jobs": [
+    {
+      "prompt": "A delicious pizza being pulled apart with stretchy cheese",
+      "output_path": "pizza_reel.mp4",
+      "duration": 5,
+      "aspect_ratio": "9:16",
+      "resolution": "720p"
+    },
+    {
+      "prompt": "Coffee being poured into a cup with steam rising",
+      "output_path": "coffee_reel.mp4",
+      "duration": 5,
+      "aspect_ratio": "9:16",
+      "resolution": "720p"
+    },
+    {
+      "prompt": "A beautiful sunset timelapse over a city skyline",
+      "output_path": "sunset_story.mp4",
+      "duration": 15,
+      "aspect_ratio": "9:16",
+      "resolution": "720p"
+    },
+    {
+      "prompt": "Colorful paint swirling and mixing in water",
+      "output_path": "paint_square.mp4",
+      "duration": 8,
+      "aspect_ratio": "1:1",
+      "resolution": "720p"
+    }
+  ],
+  "output_dir": "./output/social",
+  "max_concurrent": 3,
+  "poll_interval": 5000,
+  "max_poll_attempts": 180,
+  "default_model": "grok-imagine-video"
+}

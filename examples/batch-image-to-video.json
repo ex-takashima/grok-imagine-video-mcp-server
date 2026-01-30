@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "prompt": "Animate the character walking forward with a gentle breeze",
+      "image_url": "https://example.com/character.jpg",
+      "output_path": "walking_character.mp4",
+      "duration": 10,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "Make the clouds move slowly across the sky",
+      "image_url": "https://example.com/landscape.jpg",
+      "output_path": "moving_clouds.mp4",
+      "duration": 8,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "Add gentle ripples to the water surface",
+      "image_url": "https://example.com/lake.jpg",
+      "output_path": "rippling_water.mp4",
+      "duration": 5,
+      "aspect_ratio": "4:3"
+    }
+  ],
+  "output_dir": "./output/animations",
+  "max_concurrent": 2,
+  "poll_interval": 5000,
+  "max_poll_attempts": 120,
+  "default_model": "grok-imagine-video",
+  "default_resolution": "720p"
+}

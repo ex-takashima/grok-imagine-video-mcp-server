@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "grok-imagine-video": {
+      "command": "npx",
+      "args": ["-y", "grok-imagine-video-mcp-server"],
+      "env": {
+        "XAI_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}

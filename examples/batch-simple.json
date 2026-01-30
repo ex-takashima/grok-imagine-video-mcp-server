@@ -1,0 +1,23 @@
+{
+  "jobs": [
+    {
+      "prompt": "A cat playing with a ball in a sunny garden",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "Ocean waves crashing on a rocky shore at sunset",
+      "duration": 8,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "A butterfly landing on a colorful flower",
+      "duration": 5,
+      "aspect_ratio": "1:1"
+    }
+  ],
+  "output_dir": "./output",
+  "max_concurrent": 2,
+  "default_model": "grok-imagine-video",
+  "default_resolution": "720p"
+}
