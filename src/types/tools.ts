@@ -81,13 +81,23 @@ export type VideoGenerationStatus = 'pending' | 'completed' | 'failed';
 
 /**
  * Response from polling video generation result
+ *
+ * API returns different formats:
+ * - Pending: { "status": "pending" }
+ * - Completed: { "video": { "url": "...", "duration": 5 }, "model": "..." }
+ * - Failed: { "status": "failed", "error": "..." }
  */
 export interface XAIVideoGenerationResult {
-  status: VideoGenerationStatus;
-  /** Video URL (available when status is 'completed') */
-  url?: string;
-  /** Video duration in seconds */
-  duration?: number;
+  /** Status field (only present when pending or failed) */
+  status?: VideoGenerationStatus;
+  /** Video object (present when completed) */
+  video?: {
+    url: string;
+    duration: number;
+    respect_moderation?: boolean;
+  };
+  /** Model name (present when completed) */
+  model?: string;
   /** Error message (available when status is 'failed') */
   error?: string;
 }

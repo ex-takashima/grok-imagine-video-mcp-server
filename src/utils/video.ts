@@ -73,23 +73,31 @@ export async function pollVideoResult(
     }
 
     const result = await response.json() as XAIVideoGenerationResult;
-    debugLog(`Poll result status: ${result.status}`);
+    debugLog(`Poll response: ${JSON.stringify(result)}`);
 
-    if (onProgress) {
-      onProgress(result.status, attempt);
-    }
-
-    if (result.status === 'completed') {
-      debugLog(`Video generation completed: ${result.url}`);
+    // Check if video is ready (video object present = completed)
+    if (result.video && result.video.url) {
+      debugLog(`Video generation completed: ${result.video.url}`);
+      if (onProgress) {
+        onProgress('completed', attempt);
+      }
       return result;
     }
 
+    // Check for failure
     if (result.status === 'failed') {
       debugLog(`Video generation failed: ${result.error}`);
       throw new Error(`Video generation failed: ${result.error || 'Unknown error'}`);
     }
 
     // Status is 'pending', continue polling
+    const currentStatus = result.status || 'pending';
+    debugLog(`Poll result status: ${currentStatus}`);
+
+    if (onProgress) {
+      onProgress(currentStatus, attempt);
+    }
+
     if (attempt < maxAttempts) {
       await sleep(pollInterval);
     }

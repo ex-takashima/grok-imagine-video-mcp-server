@@ -168,12 +168,12 @@ export async function generateVideo(
       maxPollAttempts
     );
 
-    if (!result.url) {
+    if (!result.video?.url) {
       throw new McpError(ErrorCode.InternalError, 'No video URL in completed response');
     }
 
     // Download and save video
-    await downloadAndSaveVideo(result.url, normalizedPath);
+    await downloadAndSaveVideo(result.video.url, normalizedPath);
 
     const displayPath = getDisplayPath(normalizedPath);
 
@@ -181,9 +181,9 @@ export async function generateVideo(
 
     return {
       success: true,
-      url: result.url,
+      url: result.video.url,
       output_path: normalizedPath,
-      duration: result.duration,
+      duration: result.video.duration,
       request_id: requestData.request_id,
     };
   } catch (error: any) {
