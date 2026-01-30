@@ -256,7 +256,7 @@ GET /v1/videos/abc123 → { status: "completed", url: "..." } → ダウンロ�
 ## 開発
 
 ```bash
-git clone https://github.com/takajun/grok-imagine-video-mcp-server.git
+git clone https://github.com/ex-takashima/grok-imagine-video-mcp-server.git
 cd grok-imagine-video-mcp-server
 npm install
 npm run build
@@ -307,7 +307,7 @@ npx grok-imagine-video-batch batch.json --timeout 1200000
 
 ## 関連プロジェクト
 
-- [grok-imagine-image-mcp-server](https://github.com/takajun/grok-imagine-image-mcp-server) - 画像生成用MCP Server
+- [grok-imagine-image-mcp-server](https://github.com/ex-takashima/grok-imagine-image-mcp-server) - 画像生成用MCP Server
 
 ## ライセンス
 
