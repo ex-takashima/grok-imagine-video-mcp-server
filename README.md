@@ -116,13 +116,25 @@ grok-imagine-video-mcp-server
 
 ## バッチ処理 CLI
 
-バッチCLIで複数の動画を一括処理できます：
+### コマンド書式
+
+```
+grok-imagine-video-batch <config.json> [options]
+```
+
+または npx 経由：
+
+```
+npx grok-imagine-video-batch <config.json> [options]
+```
+
+### 基本的な使用例
 
 ```bash
 # 設定ファイルでバッチ実行
 npx grok-imagine-video-batch batch.json
 
-# コスト見積もりのみ
+# コスト見積もりのみ（実行しない）
 npx grok-imagine-video-batch batch.json --estimate-only
 
 # 出力先とフォーマットを指定
@@ -130,20 +142,38 @@ npx grok-imagine-video-batch batch.json --output-dir ./videos --format json
 
 # ポーリング設定をカスタマイズ
 npx grok-imagine-video-batch batch.json --poll-interval 10000 --max-poll-attempts 60
+
+# 高並列実行（タイムアウト延長）
+npx grok-imagine-video-batch batch.json --max-concurrent 5 --timeout 1800000
+
+# ヘルプ表示
+npx grok-imagine-video-batch --help
+
+# バージョン表示
+npx grok-imagine-video-batch --version
 ```
 
-### CLI オプション
+### CLI オプション一覧
 
-| オプション | 説明 | デフォルト |
-|-----------|------|-----------|
-| `--output-dir <path>` | 出力ディレクトリを上書き | 設定ファイルから |
-| `--format <text\|json>` | 出力フォーマット | `text` |
-| `--timeout <ms>` | タイムアウト（ミリ秒） | `600000` |
-| `--max-concurrent <n>` | 最大同時実行数（1-10） | `2` |
-| `--poll-interval <ms>` | ポーリング間隔（ミリ秒） | `5000` |
-| `--max-poll-attempts <n>` | 最大ポーリング回数 | `120` |
-| `--estimate-only` | コスト見積もりのみ（実行しない） | - |
-| `--allow-any-path` | 任意の出力パスを許可（CI/CD用） | - |
+| オプション | 短縮形 | 引数 | 説明 | デフォルト |
+|-----------|--------|------|------|-----------|
+| `--output-dir` | - | `<path>` | 出力ディレクトリを上書き | 設定ファイルから |
+| `--format` | - | `text\|json` | 出力フォーマット | `text` |
+| `--timeout` | - | `<ms>` | タイムアウト（ミリ秒、最小1000） | `600000` |
+| `--max-concurrent` | - | `<n>` | 最大同時実行数（1-10） | `2` |
+| `--poll-interval` | - | `<ms>` | ポーリング間隔（ミリ秒、最小1000） | `5000` |
+| `--max-poll-attempts` | - | `<n>` | 最大ポーリング回数 | `120` |
+| `--estimate-only` | - | - | コスト見積もりのみ（実行しない） | - |
+| `--allow-any-path` | - | - | 任意の出力パスを許可（CI/CD用） | - |
+| `--help` | `-h` | - | ヘルプメッセージ表示 | - |
+| `--version` | `-v` | - | バージョン表示 | - |
+
+### 終了コード
+
+| コード | 意味 |
+|--------|------|
+| `0` | 成功（全ジョブ完了） |
+| `1` | エラー（失敗またはキャンセルあり） |
 
 ### バッチ設定ファイル
 
@@ -181,6 +211,97 @@ npx grok-imagine-video-batch batch.json --poll-interval 10000 --max-poll-attempt
   }
 }
 ```
+
+### ジョブ定義スキーマ
+
+各ジョブは3種類のうち1つを指定します：
+
+#### 1. Text-to-Video（テキストから動画生成）
+
+```json
+{
+  "prompt": "生成したい動画の説明",
+  "output_path": "output.mp4",
+  "duration": 5,
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
+  "model": "grok-imagine-video"
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `prompt` | string | Yes | 動画の説明テキスト |
+| `output_path` | string | No | 出力ファイル名 |
+| `duration` | number | No | 動画長（1-15秒） |
+| `aspect_ratio` | string | No | アスペクト比 |
+| `resolution` | string | No | 解像度（720p/480p） |
+| `model` | string | No | モデル名 |
+
+#### 2. Image-to-Video（画像から動画生成）
+
+```json
+{
+  "prompt": "画像をアニメーション化する説明",
+  "image_url": "https://example.com/image.jpg",
+  "output_path": "animated.mp4",
+  "duration": 5
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `prompt` | string | Yes | アニメーションの説明 |
+| `image_url` | string | Yes | 入力画像のURL（公開アクセス可能） |
+| `output_path` | string | No | 出力ファイル名 |
+| `duration` | number | No | 動画長（1-15秒） |
+
+#### 3. Video Edit（動画編集）
+
+```json
+{
+  "prompt": "編集内容の説明",
+  "video_url": "https://example.com/video.mp4",
+  "output_path": "edited.mp4"
+}
+```
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `prompt` | string | Yes | 編集内容の説明 |
+| `video_url` | string | Yes | 編集する動画のURL（最大8.7秒） |
+| `output_path` | string | No | 出力ファイル名 |
+
+### グローバル設定
+
+| フィールド | 型 | 説明 | デフォルト |
+|-----------|-----|------|-----------|
+| `output_dir` | string | 出力ディレクトリ | `./output` |
+| `max_concurrent` | number | 最大同時実行数（1-10） | `2` |
+| `poll_interval` | number | ポーリング間隔（ms） | `5000` |
+| `max_poll_attempts` | number | 最大ポーリング回数 | `120` |
+| `default_model` | string | デフォルトモデル | `grok-imagine-video` |
+| `default_duration` | number | デフォルト動画長 | `5` |
+| `default_aspect_ratio` | string | デフォルトアスペクト比 | `16:9` |
+| `default_resolution` | string | デフォルト解像度 | `720p` |
+
+### リトライポリシー
+
+```json
+{
+  "retry_policy": {
+    "max_retries": 2,
+    "retry_delay_ms": 1000,
+    "retry_on_errors": ["rate_limit", "429", "500", "502", "503"]
+  }
+}
+```
+
+| フィールド | 型 | 説明 | デフォルト |
+|-----------|-----|------|-----------|
+| `max_retries` | number | 最大リトライ回数 | `2` |
+| `retry_delay_ms` | number | リトライ間隔（ms） | `1000` |
+| `retry_on_errors` | string[] | リトライ対象エラー | 上記参照 |
 
 設定例は `examples/` ディレクトリを参照してください：
 - `batch-simple.json` - 基本的な動画生成
