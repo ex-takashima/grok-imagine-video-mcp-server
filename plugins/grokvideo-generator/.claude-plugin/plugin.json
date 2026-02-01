@@ -1,0 +1,9 @@
+{
+  "name": "grokvideo-generator",
+  "version": "1.0.0",
+  "description": "grok-imagine-video-batch CLIを使用し、テキスト/画像から動画を生成・編集（job-manager不要）",
+  "author": {
+    "name": "ex-takashima"
+  },
+  "keywords": ["video", "grok", "xai", "generation", "editing", "text-to-video", "image-to-video", "cli"]
+}

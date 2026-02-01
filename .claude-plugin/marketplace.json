@@ -1,0 +1,18 @@
+{
+  "name": "grok-imagine-video-skills",
+  "owner": {
+    "name": "ex-takashima",
+    "email": "takajyun00@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "grokvideo-generator",
+      "source": "./plugins/grokvideo-generator",
+      "description": "grok-imagine-video-batch CLIを使用し、テキスト/画像から動画を生成・編集（job-manager不要）",
+      "version": "1.0.0",
+      "author": {
+        "name": "ex-takashima"
+      }
+    }
+  ]
+}
