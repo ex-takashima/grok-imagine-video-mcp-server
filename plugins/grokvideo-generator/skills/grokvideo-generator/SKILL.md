@@ -2,7 +2,7 @@
 name: grokvideo-generator
 description: grok-imagine-video-batch CLIを使用し、テキスト/画像から動画を生成・編集
 argument: 動画生成プロンプト
-allowed-tools: Bash(echo *), Bash(npx grok-imagine-video-batch *)
+allowed-tools: Bash(echo *), Bash(npx grok-imagine-video-batch *), Read, Write, Skill
 ---
 
 # Grok Imagine Video 動画生成スキル（CLI版）
@@ -118,8 +118,11 @@ npx grok-imagine-video-batch --version
 
 | パラメータ | デフォルト | 説明 |
 |------------|------------|------|
-| `image_url` | - | 入力画像のURL（必須） |
+| `image_url` | - | 入力画像のURL |
+| `image_path` | - | ローカル画像ファイルパス（R2自動アップロード） |
 | `duration` | `5` | 動画長（1-15秒） |
+
+> **注意**: `image_url` または `image_path` のいずれかを指定（同時指定不可）。`image_path` を使用するにはR2環境変数の設定が必要です。
 
 **Video Edit（動画編集）:**
 
@@ -147,13 +150,28 @@ npx grok-imagine-video-batch --version
 }
 ```
 
-**Image-to-Video の例:**
+**Image-to-Video の例（URL指定）:**
 ```json
 {
   "jobs": [
     {
       "prompt": "キャラクターが歩いているアニメーション",
       "image_url": "https://example.com/character.jpg",
+      "output_path": "walking.mp4",
+      "duration": 10
+    }
+  ],
+  "output_dir": "./output"
+}
+```
+
+**Image-to-Video の例（ローカルファイル）:**
+```json
+{
+  "jobs": [
+    {
+      "prompt": "キャラクターが歩いているアニメーション",
+      "image_path": "./images/character.png",
       "output_path": "walking.mp4",
       "duration": 10
     }
@@ -296,6 +314,18 @@ npx grok-imagine-video-batch config.json --timeout 1200000 --max-poll-attempts 2
 
 - Node.js 18.0.0 以上
 - `XAI_API_KEY` 環境変数が設定されていること
+
+### ローカル画像（image_path）を使用する場合
+
+Cloudflare R2 への自動アップロードが必要です。以下の環境変数を設定してください：
+
+| 変数 | 説明 |
+|------|------|
+| `R2_ACCOUNT_ID` | Cloudflare アカウント ID |
+| `R2_ACCESS_KEY_ID` | R2 API アクセスキー ID |
+| `R2_SECRET_ACCESS_KEY` | R2 API シークレットキー |
+| `R2_BUCKET_NAME` | R2 バケット名 |
+| `R2_PUBLIC_URL` | R2 バケットの公開URL（例: `https://pub-xxxx.r2.dev`） |
 
 ## 使用例
 

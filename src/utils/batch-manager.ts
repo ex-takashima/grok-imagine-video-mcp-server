@@ -87,7 +87,7 @@ export class BatchManager {
 
     for (const job of config.jobs) {
       const isEdit = !!job.video_url;
-      const isImageToVideo = !!job.image_url;
+      const isImageToVideo = !!job.image_url || !!job.image_path;
 
       let type: 'generation' | 'image_to_video' | 'edit';
       let duration: number;
@@ -259,7 +259,7 @@ export class BatchManager {
   ): Promise<BatchJobResult> {
     const jobIndex = index + 1;
     const isEditJob = !!job.video_url;
-    const isImageToVideoJob = !!job.image_url;
+    const isImageToVideoJob = !!job.image_url || !!job.image_path;
     const retryPolicy = config.retry_policy || { max_retries: 2, retry_delay_ms: 1000 };
     const maxRetries = retryPolicy.max_retries ?? 2;
     const retryDelay = retryPolicy.retry_delay_ms ?? 1000;
@@ -295,6 +295,7 @@ export class BatchManager {
             aspect_ratio: job.aspect_ratio || config.default_aspect_ratio,
             resolution: job.resolution || config.default_resolution,
             image_url: job.image_url,
+            image_path: job.image_path,
           }, pollInterval, maxPollAttempts);
         }
 
