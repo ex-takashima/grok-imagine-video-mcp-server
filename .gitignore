@@ -28,3 +28,6 @@ coverage/
 
 # Claude settings (local)
 .claude/
+nul
+.mcp.json
+/docs/articles
