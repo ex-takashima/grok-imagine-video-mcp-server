@@ -66,6 +66,24 @@ grok-imagine-video-mcp-server
 | `VIDEO_POLL_INTERVAL` | No | ポーリング間隔（ミリ秒、デフォルト: 5000） |
 | `VIDEO_MAX_POLL_ATTEMPTS` | No | 最大ポーリング回数（デフォルト: 120） |
 
+#### Cloudflare R2 設定（`image_path` 機能用）
+
+ローカル画像ファイルから動画を生成する場合、Cloudflare R2 への自動アップロードが必要です。
+
+| 変数 | 必須 | 説明 |
+|------|------|------|
+| `R2_ACCOUNT_ID` | `image_path` 使用時 | Cloudflare アカウント ID |
+| `R2_ACCESS_KEY_ID` | `image_path` 使用時 | R2 API アクセスキー ID |
+| `R2_SECRET_ACCESS_KEY` | `image_path` 使用時 | R2 API シークレットキー |
+| `R2_BUCKET_NAME` | `image_path` 使用時 | R2 バケット名 |
+| `R2_PUBLIC_URL` | `image_path` 使用時 | R2 バケットの公開URL（例: `https://pub-xxxx.r2.dev`） |
+
+R2 の設定手順:
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) にログイン
+2. R2 > バケットを作成（パブリックアクセスを有効化）
+3. R2 > Manage R2 API Tokens でAPIトークンを作成
+4. 上記の環境変数を設定
+
 ### Claude Desktop 設定
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -79,6 +97,27 @@ grok-imagine-video-mcp-server
       "args": ["-y", "grok-imagine-video-mcp-server"],
       "env": {
         "XAI_API_KEY": "xai-your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**ローカル画像（image_path）を使用する場合:**
+
+```json
+{
+  "mcpServers": {
+    "grok-imagine-video": {
+      "command": "npx",
+      "args": ["-y", "grok-imagine-video-mcp-server"],
+      "env": {
+        "XAI_API_KEY": "xai-your-api-key-here",
+        "R2_ACCOUNT_ID": "your-account-id",
+        "R2_ACCESS_KEY_ID": "your-access-key-id",
+        "R2_SECRET_ACCESS_KEY": "your-secret-access-key",
+        "R2_BUCKET_NAME": "your-bucket-name",
+        "R2_PUBLIC_URL": "https://pub-xxxx.r2.dev"
       }
     }
   }
@@ -100,6 +139,9 @@ grok-imagine-video-mcp-server
 | `aspect_ratio` | string | No | アスペクト比（デフォルト: 16:9） |
 | `resolution` | string | No | 解像度（720p/480p、デフォルト: 720p） |
 | `image_url` | string | No | Image-to-Video用の入力画像URL |
+| `image_path` | string | No | ローカル画像ファイルパス（R2に自動アップロード） |
+
+> **注意**: `image_url` と `image_path` は同時に指定できません。`image_path` を使用するには R2 環境変数の設定が必要です。
 
 ### edit_video
 
@@ -240,6 +282,7 @@ npx grok-imagine-video-batch --version
 
 #### 2. Image-to-Video（画像から動画生成）
 
+**URL指定の場合:**
 ```json
 {
   "prompt": "画像をアニメーション化する説明",
@@ -249,12 +292,25 @@ npx grok-imagine-video-batch --version
 }
 ```
 
+**ローカルファイルの場合（R2自動アップロード）:**
+```json
+{
+  "prompt": "画像をアニメーション化する説明",
+  "image_path": "./images/character.jpg",
+  "output_path": "animated.mp4",
+  "duration": 5
+}
+```
+
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | `prompt` | string | Yes | アニメーションの説明 |
-| `image_url` | string | Yes | 入力画像のURL（公開アクセス可能） |
+| `image_url` | string | No* | 入力画像のURL（公開アクセス可能） |
+| `image_path` | string | No* | ローカル画像ファイルパス（R2に自動アップロード） |
 | `output_path` | string | No | 出力ファイル名 |
 | `duration` | number | No | 動画長（1-15秒） |
+
+> *`image_url` または `image_path` のいずれかを指定（同時指定不可）
 
 #### 3. Video Edit（動画編集）
 
@@ -305,7 +361,8 @@ npx grok-imagine-video-batch --version
 
 設定例は `examples/` ディレクトリを参照してください：
 - `batch-simple.json` - 基本的な動画生成
-- `batch-image-to-video.json` - 画像からの動画生成
+- `batch-image-to-video.json` - 画像からの動画生成（URL指定）
+- `batch-local-images.json` - ローカル画像からの動画生成（R2自動アップロード）
 - `batch-with-edits.json` - 動画編集チェーン
 - `batch-social-media.json` - SNS向けフォーマット
 

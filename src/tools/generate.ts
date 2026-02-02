@@ -3,6 +3,7 @@
  */
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { access } from 'fs/promises';
 import { downloadAndSaveVideo, pollVideoResult } from '../utils/video.js';
 import {
   normalizeAndValidatePath,
@@ -10,6 +11,7 @@ import {
   generateUniqueFilePath,
 } from '../utils/path.js';
 import { debugLog } from '../utils/debug.js';
+import { uploadToR2, isR2Configured, getMissingR2Vars } from '../utils/r2.js';
 import type {
   GenerateVideoParams,
   XAIVideoGenerationRequest,
@@ -46,6 +48,7 @@ export async function generateVideo(
     aspect_ratio = DEFAULT_ASPECT_RATIO,
     resolution = DEFAULT_RESOLUTION,
     image_url,
+    image_path,
   } = params;
 
   // Normalize and validate output path
@@ -88,6 +91,44 @@ export async function generateVideo(
     );
   }
 
+  // Validate image_url and image_path mutual exclusivity
+  if (image_url && image_path) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Cannot specify both image_url and image_path. Use one or the other.'
+    );
+  }
+
+  // Resolve final image URL (upload to R2 if image_path is provided)
+  let finalImageUrl = image_url;
+
+  if (image_path) {
+    // Check if R2 is configured
+    if (!isR2Configured()) {
+      const missing = getMissingR2Vars();
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `image_path requires R2 configuration. Missing environment variables: ${missing.join(', ')}`
+      );
+    }
+
+    // Verify file exists
+    try {
+      await access(image_path);
+    } catch {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Image file not found: ${image_path}`
+      );
+    }
+
+    // Upload to R2
+    debugLog('Uploading local image to R2:', image_path);
+    const uploadResult = await uploadToR2(image_path);
+    finalImageUrl = uploadResult.url;
+    debugLog('Image uploaded to R2:', finalImageUrl);
+  }
+
   try {
     debugLog('Calling xAI Video API...');
 
@@ -101,9 +142,9 @@ export async function generateVideo(
     };
 
     // Add image for image-to-video generation
-    if (image_url) {
-      requestBody.image = { url: image_url };
-      debugLog('Image-to-video mode with image URL');
+    if (finalImageUrl) {
+      requestBody.image = { url: finalImageUrl };
+      debugLog('Image-to-video mode with image URL:', finalImageUrl);
     }
 
     debugLog('Request body:', requestBody);

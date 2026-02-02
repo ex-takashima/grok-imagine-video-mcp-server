@@ -53,6 +53,8 @@ export interface GenerateVideoParams {
   resolution?: Resolution;
   /** Source image URL for image-to-video generation */
   image_url?: string;
+  /** Local image file path for image-to-video generation (auto-uploaded to R2) */
+  image_path?: string;
 }
 
 export interface EditVideoParams {

@@ -94,6 +94,15 @@ const TOOLS = [
           type: 'string',
           description: 'Source image URL for image-to-video generation (optional)',
         },
+        image_path: {
+          type: 'string',
+          description:
+            'Local image file path for image-to-video generation. ' +
+            'Automatically uploads to Cloudflare R2 and uses the public URL. ' +
+            'Requires R2 environment variables: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, ' +
+            'R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL. ' +
+            'Cannot be used together with image_url.',
+        },
       },
       required: ['prompt'],
     },

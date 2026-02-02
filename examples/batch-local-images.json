@@ -1,0 +1,29 @@
+{
+  "jobs": [
+    {
+      "prompt": "Animate the character walking forward with a gentle breeze",
+      "image_path": "./images/character.jpg",
+      "output_path": "walking_character.mp4",
+      "duration": 10,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "Make the clouds move slowly across the sky",
+      "image_path": "./images/landscape.png",
+      "output_path": "moving_clouds.mp4",
+      "duration": 8,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "prompt": "Add gentle ripples to the water surface",
+      "image_path": "/absolute/path/to/lake.jpg",
+      "output_path": "rippling_water.mp4",
+      "duration": 5,
+      "aspect_ratio": "4:3"
+    }
+  ],
+  "output_dir": "./output/animations",
+  "max_concurrent": 2,
+  "default_resolution": "720p",
+  "_comment": "This example uses image_path for local files. Requires R2 environment variables: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL"
+}
