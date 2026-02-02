@@ -1,6 +1,6 @@
 {
   "name": "grok-imagine-video-mcp-server",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "MCP server for xAI Grok Imagine Video API - Generate and edit videos using grok-imagine-video model",
   "main": "dist/index.js",
   "type": "module",
