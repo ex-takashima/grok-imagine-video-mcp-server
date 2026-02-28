@@ -3,7 +3,8 @@
  */
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { access } from 'fs/promises';
+import { access, readFile } from 'fs/promises';
+import { extname } from 'path';
 import { downloadAndSaveVideo, pollVideoResult } from '../utils/video.js';
 import {
   normalizeAndValidatePath,
@@ -11,7 +12,6 @@ import {
   generateUniqueFilePath,
 } from '../utils/path.js';
 import { debugLog } from '../utils/debug.js';
-import { uploadToR2, isR2Configured, getMissingR2Vars } from '../utils/r2.js';
 import type {
   GenerateVideoParams,
   XAIVideoGenerationRequest,
@@ -31,6 +31,25 @@ import {
 } from '../types/tools.js';
 
 const XAI_API_ENDPOINT = 'https://api.x.ai/v1/videos/generations';
+
+/**
+ * Get MIME type for image files
+ */
+function getImageMimeType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.tiff': 'image/tiff',
+    '.tif': 'image/tiff',
+  };
+
+  return mimeTypes[ext] || 'application/octet-stream';
+}
 
 export async function generateVideo(
   apiKey: string,
@@ -99,19 +118,10 @@ export async function generateVideo(
     );
   }
 
-  // Resolve final image URL (upload to R2 if image_path is provided)
+  // Resolve final image URL (convert local file to base64 data URL if image_path is provided)
   let finalImageUrl = image_url;
 
   if (image_path) {
-    // Check if R2 is configured
-    if (!isR2Configured()) {
-      const missing = getMissingR2Vars();
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `image_path requires R2 configuration. Missing environment variables: ${missing.join(', ')}`
-      );
-    }
-
     // Verify file exists
     try {
       await access(image_path);
@@ -122,11 +132,13 @@ export async function generateVideo(
       );
     }
 
-    // Upload to R2
-    debugLog('Uploading local image to R2:', image_path);
-    const uploadResult = await uploadToR2(image_path);
-    finalImageUrl = uploadResult.url;
-    debugLog('Image uploaded to R2:', finalImageUrl);
+    // Read file and convert to base64 data URL
+    debugLog('Reading local image for base64 encoding:', image_path);
+    const fileBuffer = await readFile(image_path);
+    const mimeType = getImageMimeType(image_path);
+    const base64Data = fileBuffer.toString('base64');
+    finalImageUrl = `data:${mimeType};base64,${base64Data}`;
+    debugLog('Image converted to data URL:', { mimeType, size: fileBuffer.length });
   }
 
   try {

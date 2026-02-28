@@ -24,7 +24,7 @@ export interface BatchJobConfig {
   // Image-to-video generation
   /** URL of source image for video generation */
   image_url?: string;
-  /** Local image file path for video generation (auto-uploaded to R2) */
+  /** Local image file path for video generation (sent as base64 data URL) */
   image_path?: string;
 
   // Edit-specific options
