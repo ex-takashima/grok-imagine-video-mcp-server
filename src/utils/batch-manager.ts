@@ -10,12 +10,20 @@ import type {
   BatchExecutionOptions,
   CostEstimate,
 } from '../types/batch.js';
-import { resolveOutputPath, getDefaultOutputDirectory } from './batch-config.js';
+import {
+  resolveOutputPath,
+  getDefaultOutputDirectory,
+  getJobOperation,
+  isImageToVideo,
+  isReferenceToVideo,
+} from './batch-config.js';
 import { generateVideo } from '../tools/generate.js';
 import { editVideo } from '../tools/edit.js';
+import { extendVideo } from '../tools/extend.js';
 import { debugLog } from './debug.js';
 import {
   DEFAULT_DURATION,
+  DEFAULT_EXTENSION_DURATION,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
 } from '../types/tools.js';
@@ -59,7 +67,9 @@ class Semaphore {
 const VIDEO_COSTS = {
   generation: { perSecond: 0.05 },
   image_to_video: { perSecond: 0.05, imageBonus: 0.01 },
+  reference_to_video: { perSecond: 0.05, imageBonus: 0.01 },
   edit: { perSecond: 0.07 },
+  extension: { perSecond: 0.05 },
 };
 
 /**
@@ -80,23 +90,30 @@ export class BatchManager {
     const typeCounts: Record<string, { count: number; totalDuration: number }> = {
       generation: { count: 0, totalDuration: 0 },
       image_to_video: { count: 0, totalDuration: 0 },
+      reference_to_video: { count: 0, totalDuration: 0 },
       edit: { count: 0, totalDuration: 0 },
+      extension: { count: 0, totalDuration: 0 },
     };
 
     const defaultDuration = config.default_duration ?? DEFAULT_DURATION;
 
     for (const job of config.jobs) {
-      const isEdit = !!job.video_url;
-      const isImageToVideo = !!job.image_url || !!job.image_path;
+      const operation = getJobOperation(job);
 
-      let type: 'generation' | 'image_to_video' | 'edit';
+      let type: 'generation' | 'image_to_video' | 'reference_to_video' | 'edit' | 'extension';
       let duration: number;
 
-      if (isEdit) {
+      if (operation === 'edit') {
         type = 'edit';
         // Edit duration is unknown (comes from source video), estimate 5 seconds
         duration = 5;
-      } else if (isImageToVideo) {
+      } else if (operation === 'extend') {
+        type = 'extension';
+        duration = job.duration ?? DEFAULT_EXTENSION_DURATION;
+      } else if (isReferenceToVideo(job)) {
+        type = 'reference_to_video';
+        duration = job.duration ?? defaultDuration;
+      } else if (isImageToVideo(job)) {
         type = 'image_to_video';
         duration = job.duration ?? defaultDuration;
       } else {
@@ -118,12 +135,12 @@ export class BatchManager {
       const costs = VIDEO_COSTS[type as keyof typeof VIDEO_COSTS];
       let cost = costs.perSecond * data.totalDuration;
 
-      if (type === 'image_to_video') {
+      if (type === 'image_to_video' || type === 'reference_to_video') {
         cost += (costs as any).imageBonus * data.count;
       }
 
       breakdown.push({
-        type: type as 'generation' | 'image_to_video' | 'edit',
+        type: type as CostEstimate['breakdown'][number]['type'],
         count: data.count,
         totalDuration: data.totalDuration,
         costMin: cost,
@@ -212,7 +229,7 @@ export class BatchManager {
       if (!completedIndices.has(i + 1)) {
         results.push({
           index: i + 1,
-          prompt: config.jobs[i].prompt,
+          prompt: config.jobs[i].prompt ?? '',
           status: 'cancelled',
           error: 'Job cancelled due to timeout',
         });
@@ -258,8 +275,11 @@ export class BatchManager {
     maxPollAttempts: number
   ): Promise<BatchJobResult> {
     const jobIndex = index + 1;
-    const isEditJob = !!job.video_url;
-    const isImageToVideoJob = !!job.image_url || !!job.image_path;
+    const operation = getJobOperation(job);
+    const isEditJob = operation === 'edit';
+    const isExtendJob = operation === 'extend';
+    const isImageToVideoJob = operation === 'generate' && isImageToVideo(job);
+    const isReferenceToVideoJob = operation === 'generate' && isReferenceToVideo(job);
     const retryPolicy = config.retry_policy || { max_retries: 2, retry_delay_ms: 1000 };
     const maxRetries = retryPolicy.max_retries ?? 2;
     const retryDelay = retryPolicy.retry_delay_ms ?? 1000;
@@ -280,13 +300,22 @@ export class BatchManager {
         if (isEditJob) {
           // Edit job
           result = await editVideo(this.apiKey, {
-            prompt: job.prompt,
+            prompt: job.prompt!,
             video_url: job.video_url!,
             output_path: outputPath,
             model: job.model || config.default_model,
           }, pollInterval, maxPollAttempts);
+        } else if (isExtendJob) {
+          // Extension job
+          result = await extendVideo(this.apiKey, {
+            prompt: job.prompt!,
+            video_url: job.video_url!,
+            output_path: outputPath,
+            model: job.model || config.default_model,
+            duration: job.duration ?? DEFAULT_EXTENSION_DURATION,
+          }, pollInterval, maxPollAttempts);
         } else {
-          // Generate job (text-to-video or image-to-video)
+          // Generate job (text-to-video, image-to-video, or reference-to-video)
           result = await generateVideo(this.apiKey, {
             prompt: job.prompt,
             output_path: outputPath,
@@ -296,6 +325,7 @@ export class BatchManager {
             resolution: job.resolution || config.default_resolution,
             image_url: job.image_url,
             image_path: job.image_path,
+            reference_images: job.reference_images,
           }, pollInterval, maxPollAttempts);
         }
 
@@ -320,7 +350,7 @@ export class BatchManager {
 
         return {
           index: jobIndex,
-          prompt: job.prompt,
+          prompt: job.prompt ?? '',
           status: 'completed',
           output_path: outputPath,
           video_url: videoUrl,
@@ -328,6 +358,8 @@ export class BatchManager {
           video_duration: videoDuration,
           is_edit: isEditJob,
           is_image_to_video: isImageToVideoJob,
+          is_reference_to_video: isReferenceToVideoJob,
+          is_extension: isExtendJob,
           request_id: requestId,
         };
       } catch (error: any) {
@@ -352,12 +384,14 @@ export class BatchManager {
     const duration = Date.now() - startTime;
     return {
       index: jobIndex,
-      prompt: job.prompt,
+      prompt: job.prompt ?? '',
       status: 'failed',
       error: lastError,
       duration_ms: duration,
       is_edit: isEditJob,
       is_image_to_video: isImageToVideoJob,
+      is_reference_to_video: isReferenceToVideoJob,
+      is_extension: isExtendJob,
     };
   }
 }

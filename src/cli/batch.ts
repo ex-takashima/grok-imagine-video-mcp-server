@@ -32,7 +32,7 @@ import { BatchManager } from '../utils/batch-manager.js';
 // Load environment variables
 dotenv.config();
 
-const VERSION = '1.0.0';
+const VERSION = '1.3.0';
 
 /**
  * Parse command line arguments
@@ -231,9 +231,16 @@ function formatCostEstimateText(estimate: CostEstimate): string {
   }
   output += '\n\nBreakdown by type:\n';
 
+  const TYPE_LABELS: Record<string, string> = {
+    generation: 'Text-to-Video',
+    image_to_video: 'Image-to-Video',
+    reference_to_video: 'Reference-to-Video',
+    edit: 'Video Edit',
+    extension: 'Video Extension',
+  };
+
   for (const item of estimate.breakdown) {
-    const typeLabel = item.type === 'generation' ? 'Text-to-Video' :
-                      item.type === 'image_to_video' ? 'Image-to-Video' : 'Video Edit';
+    const typeLabel = TYPE_LABELS[item.type] ?? item.type;
     output += `  - ${item.count} x ${typeLabel}: ${item.totalDuration}s = $${item.costMin.toFixed(4)}`;
     if (item.costMin !== item.costMax) {
       output += ` - $${item.costMax.toFixed(4)}`;
@@ -272,6 +279,10 @@ function formatResultText(result: BatchResult): string {
       let type: string;
       if (job.is_edit) {
         type = 'Edited';
+      } else if (job.is_extension) {
+        type = 'Extended';
+      } else if (job.is_reference_to_video) {
+        type = 'Reference';
       } else if (job.is_image_to_video) {
         type = 'Animated';
       } else {

@@ -28,6 +28,7 @@ import {
   DEFAULT_ASPECT_RATIO,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
+  ticksToUsd,
 } from '../types/tools.js';
 
 const XAI_API_ENDPOINT = 'https://api.x.ai/v1/videos/generations';
@@ -51,6 +52,27 @@ function getImageMimeType(filePath: string): string {
   return mimeTypes[ext] || 'application/octet-stream';
 }
 
+/**
+ * Read a local image file and return it as a base64 data URL.
+ */
+async function imagePathToDataUrl(imagePath: string): Promise<string> {
+  try {
+    await access(imagePath);
+  } catch {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Image file not found: ${imagePath}`
+    );
+  }
+
+  debugLog('Reading local image for base64 encoding:', imagePath);
+  const fileBuffer = await readFile(imagePath);
+  const mimeType = getImageMimeType(imagePath);
+  const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+  debugLog('Image converted to data URL:', { mimeType, size: fileBuffer.length });
+  return dataUrl;
+}
+
 export async function generateVideo(
   apiKey: string,
   params: GenerateVideoParams,
@@ -68,17 +90,23 @@ export async function generateVideo(
     resolution = DEFAULT_RESOLUTION,
     image_url,
     image_path,
+    reference_images,
   } = params;
+
+  const hasImage = !!image_url || !!image_path;
+  const hasReferenceImages = !!reference_images && reference_images.length > 0;
+  const hasPrompt = !!prompt && prompt.trim().length > 0;
 
   // Normalize and validate output path
   let normalizedPath = await normalizeAndValidatePath(output_path);
   normalizedPath = await generateUniqueFilePath(normalizedPath);
 
-  // Validation
-  if (!prompt || prompt.trim().length === 0) {
+  // Validation: prompt is required for text-to-video (T2V) and reference-to-video (R2V),
+  // but optional for image-to-video (I2V) where the image alone drives generation.
+  if (!hasPrompt && !hasImage) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'Prompt is required and cannot be empty'
+      'Prompt is required unless an image is provided (image-to-video)'
     );
   }
 
@@ -118,27 +146,38 @@ export async function generateVideo(
     );
   }
 
+  // image (I2V) and reference_images (R2V) are different generation modes
+  if (hasImage && hasReferenceImages) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Cannot specify both an image (image-to-video) and reference_images (reference-to-video).'
+    );
+  }
+
   // Resolve final image URL (convert local file to base64 data URL if image_path is provided)
   let finalImageUrl = image_url;
 
   if (image_path) {
-    // Verify file exists
-    try {
-      await access(image_path);
-    } catch {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Image file not found: ${image_path}`
-      );
-    }
+    finalImageUrl = await imagePathToDataUrl(image_path);
+  }
 
-    // Read file and convert to base64 data URL
-    debugLog('Reading local image for base64 encoding:', image_path);
-    const fileBuffer = await readFile(image_path);
-    const mimeType = getImageMimeType(image_path);
-    const base64Data = fileBuffer.toString('base64');
-    finalImageUrl = `data:${mimeType};base64,${base64Data}`;
-    debugLog('Image converted to data URL:', { mimeType, size: fileBuffer.length });
+  // Resolve reference images (R2V): each may be a url, a local path, or a file_id
+  const resolvedReferenceImages: Array<Record<string, string>> = [];
+  if (hasReferenceImages) {
+    for (const ref of reference_images!) {
+      if (ref.file_id) {
+        resolvedReferenceImages.push({ file_id: ref.file_id });
+      } else if (ref.url) {
+        resolvedReferenceImages.push({ url: ref.url });
+      } else if (ref.path) {
+        resolvedReferenceImages.push({ url: await imagePathToDataUrl(ref.path) });
+      } else {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'Each reference image must include a url, path, or file_id.'
+        );
+      }
+    }
   }
 
   try {
@@ -147,16 +186,26 @@ export async function generateVideo(
     // Build request body
     const requestBody: Record<string, any> = {
       model,
-      prompt,
       duration,
       aspect_ratio,
       resolution,
     };
 
+    // Prompt is optional for I2V; include it whenever provided
+    if (hasPrompt) {
+      requestBody.prompt = prompt;
+    }
+
     // Add image for image-to-video generation
     if (finalImageUrl) {
       requestBody.image = { url: finalImageUrl };
-      debugLog('Image-to-video mode with image URL:', finalImageUrl);
+      debugLog('Image-to-video mode enabled');
+    }
+
+    // Add reference images for reference-to-video generation
+    if (resolvedReferenceImages.length > 0) {
+      requestBody.reference_images = resolvedReferenceImages;
+      debugLog(`Reference-to-video mode with ${resolvedReferenceImages.length} reference image(s)`);
     }
 
     debugLog('Request body:', requestBody);
@@ -238,6 +287,7 @@ export async function generateVideo(
       output_path: normalizedPath,
       duration: result.video.duration,
       request_id: requestData.request_id,
+      cost_in_usd_ticks: result.usage?.cost_in_usd_ticks,
     };
   } catch (error: any) {
     debugLog('Error generating video:', error);
@@ -268,6 +318,9 @@ export function formatGenerateResult(result: VideoGenerationResult): string {
   text += `\n  - Request ID: ${result.request_id}`;
   if (result.duration) {
     text += `\n  - Duration: ${result.duration} seconds`;
+  }
+  if (result.cost_in_usd_ticks !== undefined) {
+    text += `\n  - Cost: $${ticksToUsd(result.cost_in_usd_ticks).toFixed(4)}`;
   }
   if (result.url) {
     text += `\n  - Video URL: ${result.url}`;

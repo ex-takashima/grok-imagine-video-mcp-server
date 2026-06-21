@@ -18,6 +18,7 @@ import {
 import * as dotenv from 'dotenv';
 import { generateVideo, formatGenerateResult } from './tools/generate.js';
 import { editVideo, formatEditResult } from './tools/edit.js';
+import { extendVideo, formatExtendResult } from './tools/extend.js';
 import { debugLog } from './utils/debug.js';
 
 // Load environment variables
@@ -39,7 +40,7 @@ if (!apiKey) {
 const server = new Server(
   {
     name: 'grok-imagine-video-mcp-server',
-    version: '1.0.0',
+    version: '1.3.0',
   },
   {
     capabilities: {
@@ -53,17 +54,20 @@ const TOOLS = [
   {
     name: 'generate_video',
     description:
-      'Generate a new video from a text prompt using xAI Grok Imagine Video API. ' +
-      'Uses grok-imagine-video model. ' +
+      'Generate a new video using xAI Grok Imagine Video API (grok-imagine-video). ' +
+      'Supports text-to-video (T2V), image-to-video (I2V), and reference-to-video (R2V). ' +
       'Supports aspect ratios: 16:9, 4:3, 1:1, 9:16, 3:4, 3:2, 2:3. ' +
-      'Video duration: 1-15 seconds. Resolution: 720p or 480p. ' +
-      'Can also generate video from an image (image-to-video).',
+      'Video duration: 1-15 seconds (default 8). Resolution: 480p, 720p, or 1080p. ' +
+      'For image-to-video, provide image_url or image_path. ' +
+      'For reference-to-video, provide reference_images.',
     inputSchema: {
       type: 'object',
       properties: {
         prompt: {
           type: 'string',
-          description: 'The text prompt describing the video to generate',
+          description:
+            'Text prompt describing the video. Required for text-to-video and ' +
+            'reference-to-video; optional for image-to-video (image alone drives generation).',
         },
         output_path: {
           type: 'string',
@@ -76,7 +80,7 @@ const TOOLS = [
         },
         duration: {
           type: 'number',
-          description: 'Video duration in seconds (1-15, default: 5)',
+          description: 'Video duration in seconds (1-15, default: 8)',
           minimum: 1,
           maximum: 15,
         },
@@ -87,7 +91,7 @@ const TOOLS = [
         },
         resolution: {
           type: 'string',
-          enum: ['720p', '480p'],
+          enum: ['480p', '720p', '1080p'],
           description: 'Resolution of the generated video (default: 720p)',
         },
         image_url: {
@@ -101,8 +105,33 @@ const TOOLS = [
             'The image is sent to the API as a base64 data URL. ' +
             'Cannot be used together with image_url.',
         },
+        reference_images: {
+          type: 'array',
+          description:
+            'Reference images for reference-to-video (R2V) generation, used as ' +
+            'style/content references. Cannot be combined with image_url/image_path.',
+          items: {
+            type: 'object',
+            properties: {
+              url: {
+                type: 'string',
+                description: 'Public URL or base64 data URL of the reference image',
+              },
+              path: {
+                type: 'string',
+                description: 'Local image file path (sent as a base64 data URL)',
+              },
+              file_id: {
+                type: 'string',
+                description: 'File ID from the xAI Files API',
+              },
+            },
+          },
+        },
       },
-      required: ['prompt'],
+      // prompt is conditionally required (T2V/R2V) and validated server-side,
+      // so it is intentionally omitted here to allow image-to-video without a prompt.
+      required: [],
     },
   },
   {
@@ -136,6 +165,43 @@ const TOOLS = [
       required: ['prompt', 'video_url'],
     },
   },
+  {
+    name: 'extend_video',
+    description:
+      'Extend an existing video by generating continuation content using xAI Grok Imagine Video API. ' +
+      'Provide a source video URL and a prompt describing what should happen next. ' +
+      'The extension segment duration is 1-10 seconds (default 6).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'Description of what should happen next in the video',
+        },
+        video_url: {
+          type: 'string',
+          description:
+            'URL of the source video to extend (public URL or base64 data URL, .mp4)',
+        },
+        output_path: {
+          type: 'string',
+          description: 'Output file path (default: extended_video.mp4)',
+        },
+        model: {
+          type: 'string',
+          enum: ['grok-imagine-video'],
+          description: 'Model to use (default: grok-imagine-video)',
+        },
+        duration: {
+          type: 'number',
+          description: 'Duration of the extension segment in seconds (1-10, default: 6)',
+          minimum: 1,
+          maximum: 10,
+        },
+      },
+      required: ['prompt', 'video_url'],
+    },
+  },
 ];
 
 // List tools handler
@@ -161,6 +227,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'edit_video': {
         const result = await editVideo(apiKey!, args as any);
         const text = formatEditResult(result);
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'extend_video': {
+        const result = await extendVideo(apiKey!, args as any);
+        const text = formatExtendResult(result);
         return { content: [{ type: 'text', text }] };
       }
 

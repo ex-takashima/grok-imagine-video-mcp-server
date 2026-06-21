@@ -7,6 +7,7 @@ import * as path from 'path';
 import type {
   BatchConfig,
   BatchJobConfig,
+  BatchJobOperation,
   RetryPolicy,
   BatchExecutionOptions,
 } from '../types/batch.js';
@@ -16,13 +17,34 @@ import {
   RESOLUTIONS,
   MIN_DURATION,
   MAX_DURATION,
-  MAX_EDIT_VIDEO_DURATION,
+  MIN_EXTENSION_DURATION,
+  MAX_EXTENSION_DURATION,
   DEFAULT_DURATION,
   DEFAULT_RESOLUTION,
   DEFAULT_ASPECT_RATIO,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
 } from '../types/tools.js';
+
+/**
+ * Determine the operation for a job. Explicit `operation` wins; otherwise a job
+ * with `video_url` defaults to 'edit', and everything else to 'generate'.
+ */
+export function getJobOperation(job: BatchJobConfig): BatchJobOperation {
+  if (job.operation) return job.operation;
+  if (job.video_url) return 'edit';
+  return 'generate';
+}
+
+/** Whether a generate job is image-to-video (an image source is provided) */
+export function isImageToVideo(job: BatchJobConfig): boolean {
+  return !!job.image_url || !!job.image_path;
+}
+
+/** Whether a generate job is reference-to-video (reference images provided) */
+export function isReferenceToVideo(job: BatchJobConfig): boolean {
+  return !!job.reference_images && job.reference_images.length > 0;
+}
 
 /**
  * Custom error for batch configuration issues
@@ -175,9 +197,35 @@ export function validateBatchConfig(config: BatchConfig): void {
 function validateJobConfig(job: BatchJobConfig, index: number): void {
   const prefix = `Job ${index + 1}`;
 
-  // Validate prompt
-  if (!job.prompt || typeof job.prompt !== 'string' || job.prompt.trim().length === 0) {
-    throw new BatchConfigError(`${prefix}: prompt is required and must be a non-empty string`);
+  // Validate operation if explicitly provided
+  if (job.operation !== undefined) {
+    if (!['generate', 'edit', 'extend'].includes(job.operation)) {
+      throw new BatchConfigError(
+        `${prefix}: Invalid operation "${job.operation}". Must be one of: generate, edit, extend`
+      );
+    }
+  }
+
+  const operation = getJobOperation(job);
+  const isEditJob = operation === 'edit';
+  const isExtendJob = operation === 'extend';
+  const isVideoSourceJob = isEditJob || isExtendJob;
+  const imageToVideo = isImageToVideo(job);
+  const referenceToVideo = isReferenceToVideo(job);
+
+  // Validate prompt: required for everything except image-to-video (image drives generation)
+  const hasPrompt = !!job.prompt && typeof job.prompt === 'string' && job.prompt.trim().length > 0;
+  if (!hasPrompt) {
+    if (operation === 'generate' && imageToVideo) {
+      // Prompt optional for image-to-video
+    } else {
+      throw new BatchConfigError(
+        `${prefix}: prompt is required (optional only for image-to-video jobs)`
+      );
+    }
+  }
+  if (job.prompt !== undefined && typeof job.prompt !== 'string') {
+    throw new BatchConfigError(`${prefix}: prompt must be a string`);
   }
 
   // Validate model
@@ -189,9 +237,10 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
     }
   }
 
-  // Determine job type
-  const isEditJob = !!job.video_url;
-  const isImageToVideoJob = !!job.image_url;
+  // Edit/extend jobs require a source video URL
+  if (isVideoSourceJob && !job.video_url) {
+    throw new BatchConfigError(`${prefix}: video_url is required for ${operation} jobs`);
+  }
 
   // Validate duration
   if (job.duration !== undefined) {
@@ -200,11 +249,16 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
         `${prefix}: duration cannot be specified for edit jobs (inherited from source video)`
       );
     }
-    if (
-      typeof job.duration !== 'number' ||
-      job.duration < MIN_DURATION ||
-      job.duration > MAX_DURATION
-    ) {
+    if (typeof job.duration !== 'number') {
+      throw new BatchConfigError(`${prefix}: duration must be a number`);
+    }
+    if (isExtendJob) {
+      if (job.duration < MIN_EXTENSION_DURATION || job.duration > MAX_EXTENSION_DURATION) {
+        throw new BatchConfigError(
+          `${prefix}: extension duration must be between ${MIN_EXTENSION_DURATION} and ${MAX_EXTENSION_DURATION} seconds`
+        );
+      }
+    } else if (job.duration < MIN_DURATION || job.duration > MAX_DURATION) {
       throw new BatchConfigError(
         `${prefix}: duration must be between ${MIN_DURATION} and ${MAX_DURATION} seconds`
       );
@@ -213,9 +267,9 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
 
   // Validate aspect_ratio
   if (job.aspect_ratio !== undefined) {
-    if (isEditJob) {
+    if (isVideoSourceJob) {
       throw new BatchConfigError(
-        `${prefix}: aspect_ratio cannot be specified for edit jobs`
+        `${prefix}: aspect_ratio cannot be specified for ${operation} jobs`
       );
     }
     if (!ASPECT_RATIOS.includes(job.aspect_ratio as any)) {
@@ -234,14 +288,33 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
     }
   }
 
-  // Edit job requirements
-  if (isEditJob) {
-    // Cannot have both video_url and image_url
-    if (isImageToVideoJob) {
-      throw new BatchConfigError(
-        `${prefix}: Cannot specify both video_url and image_url`
-      );
+  // Mutually exclusive sources
+  if (isVideoSourceJob && (imageToVideo || referenceToVideo)) {
+    throw new BatchConfigError(
+      `${prefix}: Cannot combine video_url with image_url/image_path or reference_images`
+    );
+  }
+  if (job.image_url && job.image_path) {
+    throw new BatchConfigError(`${prefix}: Cannot specify both image_url and image_path`);
+  }
+  if (imageToVideo && referenceToVideo) {
+    throw new BatchConfigError(
+      `${prefix}: Cannot combine image (image-to-video) with reference_images (reference-to-video)`
+    );
+  }
+
+  // Validate reference_images entries
+  if (job.reference_images !== undefined) {
+    if (!Array.isArray(job.reference_images)) {
+      throw new BatchConfigError(`${prefix}: reference_images must be an array`);
     }
+    job.reference_images.forEach((ref, i) => {
+      if (!ref || (typeof ref.url !== 'string' && typeof ref.path !== 'string' && typeof ref.file_id !== 'string')) {
+        throw new BatchConfigError(
+          `${prefix}: reference_images[${i}] must include a url, path, or file_id`
+        );
+      }
+    });
   }
 }
 
@@ -371,13 +444,16 @@ export function resolveOutputPath(
       outputPath = path.join(outputDir, job.output_path);
     }
   } else {
-    // Generate default filename
-    const isEditJob = !!job.video_url;
-    const isImageToVideoJob = !!job.image_url;
+    // Generate default filename based on operation/type
+    const operation = getJobOperation(job);
     let prefix: string;
-    if (isEditJob) {
+    if (operation === 'edit') {
       prefix = 'edited';
-    } else if (isImageToVideoJob) {
+    } else if (operation === 'extend') {
+      prefix = 'extended';
+    } else if (isReferenceToVideo(job)) {
+      prefix = 'reference';
+    } else if (isImageToVideo(job)) {
       prefix = 'animated';
     } else {
       prefix = 'generated';

@@ -1,0 +1,20 @@
+{
+  "jobs": [
+    {
+      "operation": "extend",
+      "prompt": "カメラがゆっくり引いて街並み全体が見える",
+      "video_url": "https://example.com/source.mp4",
+      "output_path": "extended_cityscape.mp4",
+      "duration": 6
+    },
+    {
+      "operation": "extend",
+      "prompt": "人物が振り返って微笑む",
+      "video_url": "https://example.com/portrait.mp4",
+      "output_path": "extended_portrait.mp4",
+      "duration": 4
+    }
+  ],
+  "output_dir": "./output",
+  "max_concurrent": 1
+}

@@ -1,0 +1,24 @@
+{
+  "jobs": [
+    {
+      "prompt": "アニメ風に歩くキャラクターのループアニメーション",
+      "reference_images": [
+        { "url": "https://example.com/style.jpg" },
+        { "path": "./images/character.png" }
+      ],
+      "output_path": "r2v_character.mp4",
+      "duration": 8,
+      "resolution": "1080p"
+    },
+    {
+      "prompt": "水彩タッチの風景がゆっくり動く",
+      "reference_images": [
+        { "url": "https://example.com/watercolor.jpg" }
+      ],
+      "output_path": "r2v_landscape.mp4"
+    }
+  ],
+  "output_dir": "./output",
+  "max_concurrent": 2,
+  "default_resolution": "1080p"
+}

@@ -2,21 +2,32 @@
  * Batch processing type definitions for video generation
  */
 
-import type { AspectRatio, Resolution, Model } from './tools.js';
+import type { AspectRatio, Resolution, Model, ReferenceImageInput } from './tools.js';
+
+/**
+ * Operation type for a batch job. When omitted it is inferred:
+ * a job with `video_url` defaults to 'edit', otherwise 'generate'.
+ * Set to 'extend' to use the video extension endpoint instead of editing.
+ */
+export type BatchJobOperation = 'generate' | 'edit' | 'extend';
 
 /**
  * Individual job configuration in batch
  */
 export interface BatchJobConfig {
-  /** Text prompt describing the video to generate or edit instruction */
-  prompt: string;
+  /**
+   * Text prompt. Required except for image-to-video jobs where an image is provided.
+   */
+  prompt?: string;
+  /** Operation type (inferred from fields when omitted) */
+  operation?: BatchJobOperation;
   /** Output file path (optional, auto-generated if not specified) */
   output_path?: string;
   /** Model to use (default: grok-imagine-video) */
   model?: Model;
-  /** Video duration in seconds (1-15, default: 5) - not applicable for edits */
+  /** Video duration in seconds (1-15 for generate, 1-10 for extend) - not applicable for edits */
   duration?: number;
-  /** Aspect ratio (default: 16:9) - not applicable for edits */
+  /** Aspect ratio (default: 16:9) - not applicable for edits/extends */
   aspect_ratio?: AspectRatio;
   /** Resolution (default: 720p) */
   resolution?: Resolution;
@@ -27,8 +38,12 @@ export interface BatchJobConfig {
   /** Local image file path for video generation (sent as base64 data URL) */
   image_path?: string;
 
-  // Edit-specific options
-  /** URL of source video for editing (max 8.7 seconds) */
+  // Reference-to-video (R2V) generation
+  /** Reference images used as style/content references */
+  reference_images?: ReferenceImageInput[];
+
+  // Edit / extend options
+  /** URL of source video for editing (max 8.7 seconds) or extension */
   video_url?: string;
 }
 
@@ -96,6 +111,10 @@ export interface BatchJobResult {
   is_edit?: boolean;
   /** Whether this was an image-to-video job */
   is_image_to_video?: boolean;
+  /** Whether this was a reference-to-video job */
+  is_reference_to_video?: boolean;
+  /** Whether this was a video extension job */
+  is_extension?: boolean;
   /** Request ID from API */
   request_id?: string;
 }
@@ -155,7 +174,7 @@ export interface CostEstimate {
   estimatedCostMin: number;
   estimatedCostMax: number;
   breakdown: {
-    type: 'generation' | 'image_to_video' | 'edit';
+    type: 'generation' | 'image_to_video' | 'reference_to_video' | 'edit' | 'extension';
     count: number;
     totalDuration: number;
     costMin: number;

@@ -7,11 +7,27 @@ import { debugLog } from './debug.js';
 import type {
   XAIVideoGenerationResult,
   VideoGenerationStatus,
+  XAIVideoError,
 } from '../types/tools.js';
 import {
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
 } from '../types/tools.js';
+
+/**
+ * Extract a human-readable message from the polling error field.
+ * Supports both the legacy string form and the 1.5 structured object form.
+ */
+export function extractVideoErrorMessage(
+  error: string | XAIVideoError | undefined
+): string {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  if (error.message) {
+    return error.code ? `${error.message} (${error.code})` : error.message;
+  }
+  return 'Unknown error';
+}
 
 /**
  * Download video from URL and save to file
@@ -43,7 +59,11 @@ export async function pollVideoResult(
   requestId: string,
   pollInterval: number = DEFAULT_POLL_INTERVAL,
   maxAttempts: number = DEFAULT_MAX_POLL_ATTEMPTS,
-  onProgress?: (status: VideoGenerationStatus, attempt: number) => void
+  onProgress?: (
+    status: VideoGenerationStatus,
+    attempt: number,
+    progress?: number
+  ) => void
 ): Promise<XAIVideoGenerationResult> {
   debugLog(`Starting poll for request: ${requestId}`);
 
@@ -75,27 +95,41 @@ export async function pollVideoResult(
     const result = await response.json() as XAIVideoGenerationResult;
     debugLog(`Poll response: ${JSON.stringify(result)}`);
 
-    // Check if video is ready (video object present = completed)
+    // Check if video is ready (video URL present = completed)
     if (result.video && result.video.url) {
       debugLog(`Video generation completed: ${result.video.url}`);
       if (onProgress) {
-        onProgress('completed', attempt);
+        onProgress('done', attempt, 100);
       }
       return result;
     }
 
-    // Check for failure
+    // Check for failure (1.5 returns a structured error object; legacy returns a string)
     if (result.status === 'failed') {
-      debugLog(`Video generation failed: ${result.error}`);
-      throw new Error(`Video generation failed: ${result.error || 'Unknown error'}`);
+      const message = extractVideoErrorMessage(result.error);
+      debugLog(`Video generation failed: ${message}`);
+      throw new Error(`Video generation failed: ${message}`);
+    }
+
+    // Status 'done' but no URL: typically blocked by content moderation
+    if (result.status === 'done') {
+      if (result.video && result.video.respect_moderation === false) {
+        throw new Error(
+          'Video generation was blocked by content moderation (respect_moderation=false)'
+        );
+      }
+      throw new Error('Video generation completed but no video URL was returned');
     }
 
     // Status is 'pending', continue polling
     const currentStatus = result.status || 'pending';
-    debugLog(`Poll result status: ${currentStatus}`);
+    debugLog(
+      `Poll result status: ${currentStatus}` +
+        (result.progress !== undefined ? ` (${result.progress}%)` : '')
+    );
 
     if (onProgress) {
-      onProgress(currentStatus, attempt);
+      onProgress(currentStatus, attempt, result.progress);
     }
 
     if (attempt < maxAttempts) {
