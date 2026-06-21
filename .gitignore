@@ -31,3 +31,6 @@ coverage/
 nul
 .mcp.json
 /docs/articles
+
+# Generated video output (default OUTPUT_DIR)
+output/

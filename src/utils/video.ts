@@ -30,6 +30,21 @@ export function extractVideoErrorMessage(
 }
 
 /**
+ * Extract a human-readable message from a non-OK HTTP response body.
+ * Handles `{ error: "string" }`, `{ error: { message, code } }`, and `{ message }`.
+ */
+export function extractApiErrorMessage(body: any): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const err = body.error;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object' && err.message) {
+    return err.code ? `${err.message} (${err.code})` : err.message;
+  }
+  if (typeof body.message === 'string') return body.message;
+  return undefined;
+}
+
+/**
  * Download video from URL and save to file
  */
 export async function downloadAndSaveVideo(
@@ -82,14 +97,24 @@ export async function pollVideoResult(
       const errorText = await response.text();
       debugLog(`Poll request failed: ${response.status}`, errorText);
 
-      // Don't throw immediately for transient errors
-      if (response.status >= 500 && attempt < maxAttempts) {
-        debugLog(`Server error, will retry...`);
+      // Don't throw immediately for transient errors (5xx and 429 rate limits)
+      if ((response.status >= 500 || response.status === 429) && attempt < maxAttempts) {
+        debugLog(`Transient poll error (${response.status}), will retry...`);
         await sleep(pollInterval);
         continue;
       }
 
-      throw new Error(`Failed to get video status: ${response.status} ${response.statusText}`);
+      // Surface the response body when available; xAI returns { code, error } or { error: { message } }
+      let bodyMessage: string | undefined;
+      try {
+        bodyMessage = extractApiErrorMessage(JSON.parse(errorText));
+      } catch {
+        bodyMessage = errorText || undefined;
+      }
+      const detail = bodyMessage ? `: ${bodyMessage}` : '';
+      throw new Error(
+        `Failed to get video status: ${response.status} ${response.statusText}${detail}`
+      );
     }
 
     const result = await response.json() as XAIVideoGenerationResult;

@@ -4,7 +4,7 @@
  */
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { downloadAndSaveVideo, pollVideoResult } from '../utils/video.js';
+import { downloadAndSaveVideo, pollVideoResult, extractApiErrorMessage } from '../utils/video.js';
 import {
   normalizeAndValidatePath,
   getDisplayPath,
@@ -96,7 +96,8 @@ export async function editVideo(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const errorMessage =
-        errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        extractApiErrorMessage(errorData) ||
+        `HTTP ${response.status}: ${response.statusText}`;
 
       debugLog('API error:', errorData);
 

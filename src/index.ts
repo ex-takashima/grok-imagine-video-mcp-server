@@ -75,7 +75,7 @@ const TOOLS = [
         },
         model: {
           type: 'string',
-          enum: ['grok-imagine-video'],
+          enum: ['grok-imagine-video', 'grok-imagine-video-1.5'],
           description: 'Model to use (default: grok-imagine-video)',
         },
         duration: {
@@ -158,7 +158,7 @@ const TOOLS = [
         },
         model: {
           type: 'string',
-          enum: ['grok-imagine-video'],
+          enum: ['grok-imagine-video', 'grok-imagine-video-1.5'],
           description: 'Model to use (default: grok-imagine-video)',
         },
       },
@@ -189,7 +189,7 @@ const TOOLS = [
         },
         model: {
           type: 'string',
-          enum: ['grok-imagine-video'],
+          enum: ['grok-imagine-video', 'grok-imagine-video-1.5'],
           description: 'Model to use (default: grok-imagine-video)',
         },
         duration: {

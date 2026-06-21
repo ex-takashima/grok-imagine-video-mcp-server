@@ -36,7 +36,13 @@ npx grok-imagine-video-mcp-server
 
 | モデル | 機能 | 備考 |
 |--------|------|------|
-| `grok-imagine-video` | 生成・編集 | **推奨・デフォルト** |
+| `grok-imagine-video` | T2V / I2V / R2V / 編集 / 延長 | **推奨・デフォルト**。1.5世代の各機能はこのモデルで動作 |
+| `grok-imagine-video-1.5` | I2V 中心（pinned版） | T2V / R2V / 延長は非対応。特定用途のみ |
+
+> **モデルと機能の対応について（実機検証済み）**:
+> Reference-to-Video・動画延長・Text-to-Video はいずれも基本モデル `grok-imagine-video` で動作します（公式ドキュメントの例も全て `grok-imagine-video` を使用）。pinned 版の `grok-imagine-video-1.5` は T2V/R2V/延長を受け付けないため、通常はデフォルトの `grok-imagine-video` を使用してください。
+>
+> **1080p について**: API 仕様上は有効な解像度ですが、アカウント/プランによっては未開放で、`1080p video resolution is not available for this model.` が返ることがあります。その場合は `720p` / `480p` を使用してください。
 
 ## 必要条件
 

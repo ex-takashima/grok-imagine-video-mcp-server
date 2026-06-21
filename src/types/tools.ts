@@ -2,8 +2,10 @@
  * Type definitions for Grok Imagine Video MCP Server
  */
 
-// Supported models
-export const MODELS = ['grok-imagine-video'] as const;
+// Supported models.
+// `grok-imagine-video` is the base model; `grok-imagine-video-1.5` is required for
+// 1.5-only capabilities such as 1080p resolution.
+export const MODELS = ['grok-imagine-video', 'grok-imagine-video-1.5'] as const;
 
 export type Model = (typeof MODELS)[number];
 
