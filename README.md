@@ -42,7 +42,7 @@ npx grok-imagine-video-mcp-server
 > **モデルと機能の対応について（実機検証済み）**:
 > Reference-to-Video・動画延長・Text-to-Video はいずれも基本モデル `grok-imagine-video` で動作します（公式ドキュメントの例も全て `grok-imagine-video` を使用）。pinned 版の `grok-imagine-video-1.5` は T2V/R2V/延長を受け付けないため、通常はデフォルトの `grok-imagine-video` を使用してください。
 >
-> **1080p について**: API 仕様上は有効な解像度ですが、アカウント/プランによっては未開放で、`1080p video resolution is not available for this model.` が返ることがあります。その場合は `720p` / `480p` を使用してください。
+> **1080p について**: xAI の動画生成 API は現状 **`480p` / `720p` のみ**で、**720p が上限**です（[公式: Video Generation](https://docs.x.ai/developers/model-capabilities/video/generation)）。`1080p` を指定すると `1080p video resolution is not available for this model.` が返ります。これは**アカウントの権限や Grok のサブスク（SuperGrok 等）とは無関係**で、API がまだ 1080p を提供していないためです（1080p は将来のロードマップ項目）。`720p` / `480p` を使用してください。なお xAI の API 課金は消費者向け Grok サブスクとは別系統（前払いクレジット/請求）で、サブスク加入で API 機能が解放されることはありません。
 
 ## 必要条件
 
