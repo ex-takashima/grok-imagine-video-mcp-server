@@ -28,11 +28,12 @@ import {
 
 /**
  * Determine the operation for a job. Explicit `operation` wins; otherwise a job
- * with `video_url` defaults to 'edit', and everything else to 'generate'.
+ * with a source video (`video_url` / `video_file_id`) defaults to 'edit', and
+ * everything else to 'generate'.
  */
 export function getJobOperation(job: BatchJobConfig): BatchJobOperation {
   if (job.operation) return job.operation;
-  if (job.video_url) return 'edit';
+  if (job.video_url || job.video_file_id) return 'edit';
   return 'generate';
 }
 
@@ -237,9 +238,16 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
     }
   }
 
-  // Edit/extend jobs require a source video URL
-  if (isVideoSourceJob && !job.video_url) {
-    throw new BatchConfigError(`${prefix}: video_url is required for ${operation} jobs`);
+  // Edit/extend jobs require a source video (URL or Files API ID, exactly one)
+  if (isVideoSourceJob && !job.video_url && !job.video_file_id) {
+    throw new BatchConfigError(
+      `${prefix}: video_url or video_file_id is required for ${operation} jobs`
+    );
+  }
+  if (job.video_url && job.video_file_id) {
+    throw new BatchConfigError(
+      `${prefix}: Specify only one of video_url or video_file_id`
+    );
   }
 
   // Validate duration
@@ -289,15 +297,15 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
   }
 
   // Mutually exclusive sources
-  // (an explicit "operation": "generate" would otherwise silently ignore video_url)
-  if (!isVideoSourceJob && job.video_url) {
+  // (an explicit "operation": "generate" would otherwise silently ignore the source video)
+  if (!isVideoSourceJob && (job.video_url || job.video_file_id)) {
     throw new BatchConfigError(
-      `${prefix}: video_url cannot be specified for generate jobs. Use "operation": "edit" or "extend".`
+      `${prefix}: video_url/video_file_id cannot be specified for generate jobs. Use "operation": "edit" or "extend".`
     );
   }
   if (isVideoSourceJob && (imageToVideo || referenceToVideo)) {
     throw new BatchConfigError(
-      `${prefix}: Cannot combine video_url with image_url/image_path or reference_images`
+      `${prefix}: Cannot combine a source video with image_url/image_path/image_file_id or reference_images`
     );
   }
   if ([job.image_url, job.image_path, job.image_file_id].filter(Boolean).length > 1) {

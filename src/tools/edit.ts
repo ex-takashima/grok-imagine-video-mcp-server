@@ -34,15 +34,22 @@ export async function editVideo(
   const {
     prompt,
     video_url,
+    video_file_id,
     output_path = 'edited_video.mp4',
     model = 'grok-imagine-video',
   } = params;
 
-  // Validate that video URL is provided
-  if (!video_url) {
+  // Validate video source (URL or Files API ID, exactly one)
+  if (!video_url && !video_file_id) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'video_url is required for video editing'
+      'Either video_url or video_file_id is required for video editing'
+    );
+  }
+  if (video_url && video_file_id) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Specify only one of video_url or video_file_id.'
     );
   }
 
@@ -72,9 +79,7 @@ export async function editVideo(
     const requestBody: Record<string, any> = {
       model,
       prompt,
-      video: {
-        url: video_url,
-      },
+      video: video_file_id ? { file_id: video_file_id } : { url: video_url },
     };
 
     debugLog('Request body:', requestBody);

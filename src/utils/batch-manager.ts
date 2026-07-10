@@ -301,7 +301,8 @@ export class BatchManager {
           // Edit job
           result = await editVideo(this.apiKey, {
             prompt: job.prompt!,
-            video_url: job.video_url!,
+            video_url: job.video_url,
+            video_file_id: job.video_file_id,
             output_path: outputPath,
             model: job.model || config.default_model,
           }, pollInterval, maxPollAttempts);
@@ -309,7 +310,8 @@ export class BatchManager {
           // Extension job
           result = await extendVideo(this.apiKey, {
             prompt: job.prompt!,
-            video_url: job.video_url!,
+            video_url: job.video_url,
+            video_file_id: job.video_file_id,
             output_path: outputPath,
             model: job.model || config.default_model,
             duration: job.duration ?? DEFAULT_EXTENSION_DURATION,

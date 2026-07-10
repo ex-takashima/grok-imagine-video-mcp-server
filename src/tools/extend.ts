@@ -36,6 +36,7 @@ export async function extendVideo(
   const {
     prompt,
     video_url,
+    video_file_id,
     output_path = 'extended_video.mp4',
     model = 'grok-imagine-video',
     duration = DEFAULT_EXTENSION_DURATION,
@@ -49,10 +50,17 @@ export async function extendVideo(
     );
   }
 
-  if (!video_url) {
+  // Validate video source (URL or Files API ID, exactly one)
+  if (!video_url && !video_file_id) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'video_url is required for video extension'
+      'Either video_url or video_file_id is required for video extension'
+    );
+  }
+  if (video_url && video_file_id) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Specify only one of video_url or video_file_id.'
     );
   }
 
@@ -82,9 +90,7 @@ export async function extendVideo(
       model,
       prompt,
       duration,
-      video: {
-        url: video_url,
-      },
+      video: video_file_id ? { file_id: video_file_id } : { url: video_url },
     };
 
     debugLog('Request body:', requestBody);

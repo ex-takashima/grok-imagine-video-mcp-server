@@ -40,7 +40,7 @@ if (!apiKey) {
 const server = new Server(
   {
     name: 'grok-imagine-video-mcp-server',
-    version: '1.4.0',
+    version: '1.5.0',
   },
   {
     capabilities: {
@@ -156,7 +156,15 @@ const TOOLS = [
         },
         video_url: {
           type: 'string',
-          description: 'URL of the source video to edit (must be publicly accessible, max 8.7 seconds)',
+          description:
+            'URL of the source video to edit (must be publicly accessible, max 8.7 seconds). ' +
+            'Provide exactly one of video_url or video_file_id.',
+        },
+        video_file_id: {
+          type: 'string',
+          description:
+            'File ID of the source video from the xAI Files API. ' +
+            'Provide exactly one of video_url or video_file_id.',
         },
         output_path: {
           type: 'string',
@@ -168,7 +176,8 @@ const TOOLS = [
           description: 'Model to use (default: grok-imagine-video)',
         },
       },
-      required: ['prompt', 'video_url'],
+      // video source (video_url XOR video_file_id) is validated server-side
+      required: ['prompt'],
     },
   },
   {
@@ -187,7 +196,14 @@ const TOOLS = [
         video_url: {
           type: 'string',
           description:
-            'URL of the source video to extend (public URL or base64 data URL, .mp4)',
+            'URL of the source video to extend (public URL or base64 data URL, .mp4). ' +
+            'Provide exactly one of video_url or video_file_id.',
+        },
+        video_file_id: {
+          type: 'string',
+          description:
+            'File ID of the source video from the xAI Files API. ' +
+            'Provide exactly one of video_url or video_file_id.',
         },
         output_path: {
           type: 'string',
@@ -205,7 +221,8 @@ const TOOLS = [
           maximum: 10,
         },
       },
-      required: ['prompt', 'video_url'],
+      // video source (video_url XOR video_file_id) is validated server-side
+      required: ['prompt'],
     },
   },
 ];

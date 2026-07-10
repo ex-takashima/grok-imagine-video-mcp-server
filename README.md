@@ -123,7 +123,8 @@ grok-imagine-video-mcp-server
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 編集内容の説明 |
-| `video_url` | string | Yes | 編集する動画のURL（公開アクセス可能、最大8.7秒） |
+| `video_url` | string | No* | 編集する動画のURL（公開アクセス可能、最大8.7秒） |
+| `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイルパス（デフォルト: edited_video.mp4） |
 | `model` | string | No | モデル（デフォルト: grok-imagine-video） |
 
@@ -136,7 +137,8 @@ grok-imagine-video-mcp-server
 | パラメータ | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 続きで何が起こるかの説明 |
-| `video_url` | string | Yes | 延長する動画のURL（公開アクセス可能 or base64 data URL、.mp4） |
+| `video_url` | string | No* | 延長する動画のURL（公開アクセス可能 or base64 data URL、.mp4） |
+| `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイルパス（デフォルト: extended_video.mp4） |
 | `model` | string | No | モデル（デフォルト: grok-imagine-video） |
 | `duration` | number | No | 延長セグメントの長さ（1-10秒、デフォルト: 6） |
@@ -334,7 +336,8 @@ npx grok-imagine-video-batch --version
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 編集内容の説明 |
-| `video_url` | string | Yes | 編集する動画のURL（最大8.7秒） |
+| `video_url` | string | No* | 編集する動画のURL（最大8.7秒） |
+| `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイル名 |
 
 #### 5. Video Extension（動画延長）
@@ -351,13 +354,14 @@ npx grok-imagine-video-batch --version
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| `operation` | string | Yes | `"extend"` を指定（省略すると `video_url` 付きは編集扱い） |
+| `operation` | string | Yes | `"extend"` を指定（省略するとソース動画付きは編集扱い） |
 | `prompt` | string | Yes | 続きで何が起こるかの説明 |
-| `video_url` | string | Yes | 延長する動画のURL |
+| `video_url` | string | No* | 延長する動画のURL |
+| `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイル名 |
 | `duration` | number | No | 延長セグメントの長さ（1-10秒、デフォルト6） |
 
-> `video_url` を持つジョブは既定で編集（edit）として扱われます。延長したい場合は `"operation": "extend"` を明示してください。
+> `video_url` または `video_file_id` を持つジョブは既定で編集（edit）として扱われます。延長したい場合は `"operation": "extend"` を明示してください。
 
 ### グローバル設定
 
