@@ -119,10 +119,10 @@ npx grok-imagine-video-batch --version
 | パラメータ | デフォルト | 説明 |
 |------------|------------|------|
 | `image_url` | - | 入力画像のURL |
-| `image_path` | - | ローカル画像ファイルパス（R2自動アップロード） |
-| `duration` | `5` | 動画長（1-15秒） |
+| `image_path` | - | ローカル画像ファイルパス（base64 data URLとして送信。10MB超はxAI Files API経由で自動アップロード） |
+| `duration` | `8` | 動画長（1-15秒） |
 
-> **注意**: `image_url` または `image_path` のいずれかを指定（同時指定不可）。`image_path` を使用するにはR2環境変数の設定が必要です。
+> **注意**: `image_url` または `image_path` のいずれかを指定（同時指定不可）。`image_path` は追加の設定なしで使用できます（`XAI_API_KEY` のみで動作）。
 
 **Video Edit（動画編集）:**
 
@@ -317,15 +317,7 @@ npx grok-imagine-video-batch config.json --timeout 1200000 --max-poll-attempts 2
 
 ### ローカル画像（image_path）を使用する場合
 
-Cloudflare R2 への自動アップロードが必要です。以下の環境変数を設定してください：
-
-| 変数 | 説明 |
-|------|------|
-| `R2_ACCOUNT_ID` | Cloudflare アカウント ID |
-| `R2_ACCESS_KEY_ID` | R2 API アクセスキー ID |
-| `R2_SECRET_ACCESS_KEY` | R2 API シークレットキー |
-| `R2_BUCKET_NAME` | R2 バケット名 |
-| `R2_PUBLIC_URL` | R2 バケットの公開URL（例: `https://pub-xxxx.r2.dev`） |
+追加の設定は不要です。画像は base64 data URL として API に直接送信され、10MB を超えるファイルは xAI Files API 経由で自動アップロードされます（上限 48MB、`XAI_API_KEY` のみで動作）。
 
 ## 使用例
 
