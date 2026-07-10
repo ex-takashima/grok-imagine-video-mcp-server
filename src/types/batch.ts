@@ -37,6 +37,8 @@ export interface BatchJobConfig {
   image_url?: string;
   /** Local image file path for video generation (sent as base64 data URL) */
   image_path?: string;
+  /** File ID from the xAI Files API for video generation */
+  image_file_id?: string;
 
   // Reference-to-video (R2V) generation
   /** Reference images used as style/content references */

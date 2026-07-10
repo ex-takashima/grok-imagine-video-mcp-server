@@ -3,8 +3,9 @@
  */
 
 // Supported models.
-// `grok-imagine-video` is the base model; `grok-imagine-video-1.5` is required for
-// 1.5-only capabilities such as 1080p resolution.
+// `grok-imagine-video` is the base model and supports every mode (T2V/I2V/R2V/edit/extend).
+// `grok-imagine-video-1.5` is a pinned, I2V-focused variant that rejects T2V/R2V/extend
+// with "not supported for this model" — 1.5 features do NOT require selecting it.
 export const MODELS = ['grok-imagine-video', 'grok-imagine-video-1.5'] as const;
 
 export type Model = (typeof MODELS)[number];
@@ -22,9 +23,16 @@ export const ASPECT_RATIOS = [
 
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 
-// Supported resolutions (1080p added in grok-imagine-video 1.5)
+// Supported resolutions. 1080p is NOT yet available from the xAI API (every
+// model/mode returns "1080p video resolution is not available for this model.");
+// it is kept here only for forward compatibility when xAI ships it.
 export const RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 export type Resolution = (typeof RESOLUTIONS)[number];
+
+// Maximum local image file size sent inline as a base64 data URL (I2V/R2V).
+// Guards the long-running server against multi-hundred-MB request bodies the
+// API would reject anyway (base64 adds ~33% on top of the file size).
+export const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 
 // Duration constraints
 export const MIN_DURATION = 1;
@@ -79,6 +87,8 @@ export interface GenerateVideoParams {
   image_url?: string;
   /** Local image file path for image-to-video generation (sent as base64 data URL) */
   image_path?: string;
+  /** File ID from the xAI Files API for image-to-video generation */
+  image_file_id?: string;
   /** Reference images for reference-to-video (R2V) generation */
   reference_images?: ReferenceImageInput[];
 }

@@ -26,11 +26,11 @@ npx grok-imagine-video-mcp-server
 - **動画延長（Extension）**: 既存動画の続きを生成して延長
 - **バッチ処理**: CLIで複数動画を一括処理
 - 多様なアスペクト比をサポート（16:9, 4:3, 1:1, 9:16 など）
-- 解像度: 480p, 720p, 1080p
+- 解像度: 480p, 720p（1080p は API 未提供・将来対応用に予約）
 - 動画長: 1〜15秒（デフォルト8秒。編集時は元動画と同じ長さ、延長は1〜10秒）
 - 非同期処理対応（ポーリングによる結果取得、進捗・コスト表示）
 
-> **grok-imagine-video 1.5 対応**: 1080p 解像度、Reference-to-Video、動画延長、構造化エラー/進捗、実コスト（`cost_in_usd_ticks`）表示に対応しています。
+> **grok-imagine-video 1.5 対応**: Reference-to-Video、動画延長、構造化エラー/進捗、実コスト（`cost_in_usd_ticks`）表示に対応しています。1080p は xAI API 側が未提供のため現時点では利用できません。
 
 ## サポートモデル
 
@@ -111,9 +111,10 @@ grok-imagine-video-mcp-server
 | `resolution` | string | No | 解像度（480p/720p/1080p、デフォルト: 720p） |
 | `image_url` | string | No | Image-to-Video用の入力画像URL |
 | `image_path` | string | No | ローカル画像ファイルパス（base64 data URLとしてAPIに送信） |
+| `image_file_id` | string | No | xAI Files API の File ID（Image-to-Video用） |
 | `reference_images` | array | No | Reference-to-Video用の参照画像（各要素は `url` / `path` / `file_id` のいずれか） |
 
-> **注意**: `image_url` と `image_path` は同時に指定できません。また、画像（I2V）と `reference_images`（R2V）も同時指定できません。
+> **注意**: `image_url` / `image_path` / `image_file_id` はいずれか1つのみ指定できます。また、画像（I2V）と `reference_images`（R2V）も同時指定できません。
 
 ### edit_video
 
@@ -291,10 +292,11 @@ npx grok-imagine-video-batch --version
 | `prompt` | string | Yes | アニメーションの説明 |
 | `image_url` | string | No* | 入力画像のURL（公開アクセス可能） |
 | `image_path` | string | No* | ローカル画像ファイルパス（base64 data URLとしてAPIに送信） |
+| `image_file_id` | string | No* | xAI Files API の File ID |
 | `output_path` | string | No | 出力ファイル名 |
 | `duration` | number | No | 動画長（1-15秒） |
 
-> *`image_url` または `image_path` のいずれかを指定（同時指定不可）
+> *`image_url` / `image_path` / `image_file_id` のいずれか1つを指定（同時指定不可）
 
 #### 3. Reference-to-Video（参照画像から動画生成 / R2V）
 
@@ -412,7 +414,7 @@ npx grok-imagine-video-batch --version
 
 | 解像度 | 説明 |
 |--------|------|
-| `1080p` | フルHD画質（1.5で追加） |
+| `1080p` | フルHD画質（**API 未提供**。指定すると "1080p video resolution is not available for this model." になります。将来対応用） |
 | `720p` | HD画質（デフォルト） |
 | `480p` | 標準画質 |
 

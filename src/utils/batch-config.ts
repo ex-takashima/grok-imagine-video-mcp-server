@@ -38,7 +38,7 @@ export function getJobOperation(job: BatchJobConfig): BatchJobOperation {
 
 /** Whether a generate job is image-to-video (an image source is provided) */
 export function isImageToVideo(job: BatchJobConfig): boolean {
-  return !!job.image_url || !!job.image_path;
+  return !!job.image_url || !!job.image_path || !!job.image_file_id;
 }
 
 /** Whether a generate job is reference-to-video (reference images provided) */
@@ -289,13 +289,21 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
   }
 
   // Mutually exclusive sources
+  // (an explicit "operation": "generate" would otherwise silently ignore video_url)
+  if (!isVideoSourceJob && job.video_url) {
+    throw new BatchConfigError(
+      `${prefix}: video_url cannot be specified for generate jobs. Use "operation": "edit" or "extend".`
+    );
+  }
   if (isVideoSourceJob && (imageToVideo || referenceToVideo)) {
     throw new BatchConfigError(
       `${prefix}: Cannot combine video_url with image_url/image_path or reference_images`
     );
   }
-  if (job.image_url && job.image_path) {
-    throw new BatchConfigError(`${prefix}: Cannot specify both image_url and image_path`);
+  if ([job.image_url, job.image_path, job.image_file_id].filter(Boolean).length > 1) {
+    throw new BatchConfigError(
+      `${prefix}: Specify only one of image_url, image_path, or image_file_id`
+    );
   }
   if (imageToVideo && referenceToVideo) {
     throw new BatchConfigError(

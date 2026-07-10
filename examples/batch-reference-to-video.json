@@ -8,7 +8,7 @@
       ],
       "output_path": "r2v_character.mp4",
       "duration": 8,
-      "resolution": "1080p"
+      "resolution": "720p"
     },
     {
       "prompt": "水彩タッチの風景がゆっくり動く",
@@ -20,5 +20,5 @@
   ],
   "output_dir": "./output",
   "max_concurrent": 2,
-  "default_resolution": "1080p"
+  "default_resolution": "720p"
 }

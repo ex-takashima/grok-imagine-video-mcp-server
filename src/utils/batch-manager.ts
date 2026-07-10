@@ -325,6 +325,7 @@ export class BatchManager {
             resolution: job.resolution || config.default_resolution,
             image_url: job.image_url,
             image_path: job.image_path,
+            image_file_id: job.image_file_id,
             reference_images: job.reference_images,
           }, pollInterval, maxPollAttempts);
         }

@@ -3,18 +3,16 @@
  */
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { access, readFile } from 'fs/promises';
+import { stat, readFile } from 'fs/promises';
 import { extname } from 'path';
-import { downloadAndSaveVideo, pollVideoResult, extractApiErrorMessage } from '../utils/video.js';
+import { runVideoJob, formatVideoResult } from '../utils/video.js';
 import {
   normalizeAndValidatePath,
-  getDisplayPath,
   generateUniqueFilePath,
 } from '../utils/path.js';
 import { debugLog } from '../utils/debug.js';
 import type {
   GenerateVideoParams,
-  XAIVideoGenerationRequest,
   VideoGenerationResult,
 } from '../types/tools.js';
 import {
@@ -23,41 +21,56 @@ import {
   MODELS,
   MIN_DURATION,
   MAX_DURATION,
+  MAX_IMAGE_FILE_BYTES,
   DEFAULT_DURATION,
   DEFAULT_RESOLUTION,
   DEFAULT_ASPECT_RATIO,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
-  ticksToUsd,
 } from '../types/tools.js';
 
 const XAI_API_ENDPOINT = 'https://api.x.ai/v1/videos/generations';
+
+// Image formats we can label correctly in a data URL. Unlike the old R2 flow
+// (where xAI fetched raw bytes from a URL and could content-sniff them), the
+// MIME type declared here travels inside the payload, so unknown extensions
+// must be rejected client-side instead of guessing.
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.tiff': 'image/tiff',
+  '.tif': 'image/tiff',
+};
 
 /**
  * Get MIME type for image files
  */
 function getImageMimeType(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.bmp': 'image/bmp',
-    '.tiff': 'image/tiff',
-    '.tif': 'image/tiff',
-  };
-
-  return mimeTypes[ext] || 'application/octet-stream';
+  const mimeType = IMAGE_MIME_TYPES[ext];
+  if (!mimeType) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Unsupported image format "${ext || '(no extension)'}": ${filePath}. ` +
+        `Supported extensions: ${Object.keys(IMAGE_MIME_TYPES).join(', ')}`
+    );
+  }
+  return mimeType;
 }
 
 /**
  * Read a local image file and return it as a base64 data URL.
  */
 async function imagePathToDataUrl(imagePath: string): Promise<string> {
+  const mimeType = getImageMimeType(imagePath);
+
+  let fileSize: number;
   try {
-    await access(imagePath);
+    fileSize = (await stat(imagePath)).size;
   } catch {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -65,9 +78,17 @@ async function imagePathToDataUrl(imagePath: string): Promise<string> {
     );
   }
 
+  if (fileSize > MAX_IMAGE_FILE_BYTES) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Image file too large: ${imagePath} (${(fileSize / (1024 * 1024)).toFixed(1)} MB). ` +
+        `Local images are sent inline as base64; maximum is ${MAX_IMAGE_FILE_BYTES / (1024 * 1024)} MB. ` +
+        `Use image_url with a hosted image for larger files.`
+    );
+  }
+
   debugLog('Reading local image for base64 encoding:', imagePath);
   const fileBuffer = await readFile(imagePath);
-  const mimeType = getImageMimeType(imagePath);
   const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
   debugLog('Image converted to data URL:', { mimeType, size: fileBuffer.length });
   return dataUrl;
@@ -90,10 +111,11 @@ export async function generateVideo(
     resolution = DEFAULT_RESOLUTION,
     image_url,
     image_path,
+    image_file_id,
     reference_images,
   } = params;
 
-  const hasImage = !!image_url || !!image_path;
+  const hasImage = !!image_url || !!image_path || !!image_file_id;
   const hasReferenceImages = !!reference_images && reference_images.length > 0;
   const hasPrompt = !!prompt && prompt.trim().length > 0;
 
@@ -138,11 +160,12 @@ export async function generateVideo(
     );
   }
 
-  // Validate image_url and image_path mutual exclusivity
-  if (image_url && image_path) {
+  // Validate image source mutual exclusivity (URL, local path, or Files API ID)
+  const imageSourceCount = [image_url, image_path, image_file_id].filter(Boolean).length;
+  if (imageSourceCount > 1) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'Cannot specify both image_url and image_path. Use one or the other.'
+      'Specify only one of image_url, image_path, or image_file_id.'
     );
   }
 
@@ -196,8 +219,11 @@ export async function generateVideo(
       requestBody.prompt = prompt;
     }
 
-    // Add image for image-to-video generation
-    if (finalImageUrl) {
+    // Add image for image-to-video generation (URL/data URL or Files API ID)
+    if (image_file_id) {
+      requestBody.image = { file_id: image_file_id };
+      debugLog('Image-to-video mode enabled (file_id)');
+    } else if (finalImageUrl) {
       requestBody.image = { url: finalImageUrl };
       debugLog('Image-to-video mode enabled');
     }
@@ -208,88 +234,14 @@ export async function generateVideo(
       debugLog(`Reference-to-video mode with ${resolvedReferenceImages.length} reference image(s)`);
     }
 
-    debugLog('Request body:', requestBody);
-
-    // Call xAI API to start video generation
-    const response = await fetch(XAI_API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage =
-        extractApiErrorMessage(errorData) ||
-        `HTTP ${response.status}: ${response.statusText}`;
-
-      debugLog('API error:', errorData);
-
-      if (response.status === 401) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Authentication failed. Please check your XAI_API_KEY environment variable.'
-        );
-      } else if (response.status === 403) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Access denied. Please check your API key permissions.'
-        );
-      } else if (response.status === 400) {
-        throw new McpError(ErrorCode.InvalidRequest, `Bad request: ${errorMessage}`);
-      } else if (response.status === 429) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Rate limit exceeded. Please wait and try again.'
-        );
-      } else {
-        throw new McpError(
-          ErrorCode.InternalError,
-          `API error (${response.status}): ${errorMessage}`
-        );
-      }
-    }
-
-    const requestData = (await response.json()) as XAIVideoGenerationRequest;
-
-    debugLog('Video generation request accepted:', requestData);
-
-    if (!requestData.request_id) {
-      throw new McpError(ErrorCode.InternalError, 'No request_id returned from API');
-    }
-
-    // Poll for result
-    debugLog('Starting polling for video result...');
-    const result = await pollVideoResult(
+    return await runVideoJob(
+      XAI_API_ENDPOINT,
       apiKey,
-      requestData.request_id,
+      requestBody,
+      normalizedPath,
       pollInterval,
       maxPollAttempts
     );
-
-    if (!result.video?.url) {
-      throw new McpError(ErrorCode.InternalError, 'No video URL in completed response');
-    }
-
-    // Download and save video
-    await downloadAndSaveVideo(result.video.url, normalizedPath);
-
-    const displayPath = getDisplayPath(normalizedPath);
-
-    debugLog(`Video saved to: ${displayPath}`);
-
-    return {
-      success: true,
-      url: result.video.url,
-      output_path: normalizedPath,
-      duration: result.video.duration,
-      request_id: requestData.request_id,
-      cost_in_usd_ticks: result.usage?.cost_in_usd_ticks,
-    };
   } catch (error: any) {
     debugLog('Error generating video:', error);
 
@@ -308,24 +260,5 @@ export async function generateVideo(
  * Format result for MCP response
  */
 export function formatGenerateResult(result: VideoGenerationResult): string {
-  if (!result.success) {
-    return `Video generation failed: ${result.error}`;
-  }
-
-  const displayPath = result.output_path ? getDisplayPath(result.output_path) : 'unknown';
-
-  let text = `Video generated successfully: ${displayPath}`;
-  text += `\n\nDetails:`;
-  text += `\n  - Request ID: ${result.request_id}`;
-  if (result.duration) {
-    text += `\n  - Duration: ${result.duration} seconds`;
-  }
-  if (result.cost_in_usd_ticks !== undefined) {
-    text += `\n  - Cost: $${ticksToUsd(result.cost_in_usd_ticks).toFixed(4)}`;
-  }
-  if (result.url) {
-    text += `\n  - Video URL: ${result.url}`;
-  }
-
-  return text;
+  return formatVideoResult(result, { action: 'generation', verb: 'generated' });
 }

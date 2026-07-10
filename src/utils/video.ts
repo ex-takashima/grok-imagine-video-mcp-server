@@ -3,15 +3,20 @@
  */
 
 import * as fs from 'fs/promises';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { debugLog } from './debug.js';
+import { getDisplayPath } from './path.js';
 import type {
   XAIVideoGenerationResult,
+  XAIVideoGenerationRequest,
+  VideoGenerationResult,
   VideoGenerationStatus,
   XAIVideoError,
 } from '../types/tools.js';
 import {
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
+  ticksToUsd,
 } from '../types/tools.js';
 
 /**
@@ -136,8 +141,9 @@ export async function pollVideoResult(
       throw new Error(`Video generation failed: ${message}`);
     }
 
-    // Status 'done' but no URL: typically blocked by content moderation
-    if (result.status === 'done') {
+    // Terminal status but no URL: typically blocked by content moderation.
+    // 1.5 reports 'done'; legacy responses use 'completed'.
+    if (result.status === 'done' || result.status === 'completed') {
       if (result.video && result.video.respect_moderation === false) {
         throw new Error(
           'Video generation was blocked by content moderation (respect_moderation=false)'
@@ -170,6 +176,131 @@ export async function pollVideoResult(
  */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Map a non-OK submit response to an McpError. Shared by generate/edit/extend.
+ */
+async function throwForApiError(response: Response): Promise<never> {
+  const errorData = await response.json().catch(() => ({}));
+  const errorMessage =
+    extractApiErrorMessage(errorData) ||
+    `HTTP ${response.status}: ${response.statusText}`;
+
+  debugLog('API error:', errorData);
+
+  if (response.status === 401) {
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      'Authentication failed. Please check your XAI_API_KEY environment variable.'
+    );
+  }
+  if (response.status === 403) {
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      'Access denied. Please check your API key permissions.'
+    );
+  }
+  if (response.status === 400) {
+    throw new McpError(ErrorCode.InvalidRequest, `Bad request: ${errorMessage}`);
+  }
+  if (response.status === 429) {
+    // "429" must stay in this message: batch retry_on_errors matches by substring
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      'Rate limit exceeded (429). Please wait and try again.'
+    );
+  }
+  throw new McpError(
+    ErrorCode.InternalError,
+    `API error (${response.status}): ${errorMessage}`
+  );
+}
+
+/**
+ * Submit a video job, poll until done, download the MP4 to outputPath, and
+ * return the normalized result. Shared pipeline for generate/edit/extend.
+ */
+export async function runVideoJob(
+  endpoint: string,
+  apiKey: string,
+  requestBody: Record<string, any>,
+  outputPath: string,
+  pollInterval: number,
+  maxPollAttempts: number
+): Promise<VideoGenerationResult> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    await throwForApiError(response);
+  }
+
+  const requestData = (await response.json()) as XAIVideoGenerationRequest;
+  debugLog('Video request accepted:', requestData);
+
+  if (!requestData.request_id) {
+    throw new McpError(ErrorCode.InternalError, 'No request_id returned from API');
+  }
+
+  const result = await pollVideoResult(
+    apiKey,
+    requestData.request_id,
+    pollInterval,
+    maxPollAttempts
+  );
+
+  if (!result.video?.url) {
+    throw new McpError(ErrorCode.InternalError, 'No video URL in completed response');
+  }
+
+  await downloadAndSaveVideo(result.video.url, outputPath);
+  debugLog(`Video saved to: ${getDisplayPath(outputPath)}`);
+
+  return {
+    success: true,
+    url: result.video.url,
+    output_path: outputPath,
+    duration: result.video.duration,
+    request_id: requestData.request_id,
+    cost_in_usd_ticks: result.usage?.cost_in_usd_ticks,
+  };
+}
+
+/**
+ * Format a job result for MCP text output. Shared by generate/edit/extend.
+ */
+export function formatVideoResult(
+  result: VideoGenerationResult,
+  opts: { action: string; verb: string; durationLabel?: string }
+): string {
+  if (!result.success) {
+    return `Video ${opts.action} failed: ${result.error}`;
+  }
+
+  const displayPath = result.output_path ? getDisplayPath(result.output_path) : 'unknown';
+
+  let text = `Video ${opts.verb} successfully: ${displayPath}`;
+  text += `\n\nDetails:`;
+  text += `\n  - Request ID: ${result.request_id}`;
+  if (result.duration) {
+    text += `\n  - ${opts.durationLabel ?? 'Duration'}: ${result.duration} seconds`;
+  }
+  if (result.cost_in_usd_ticks !== undefined) {
+    text += `\n  - Cost: $${ticksToUsd(result.cost_in_usd_ticks).toFixed(4)}`;
+  }
+  if (result.url) {
+    text += `\n  - Video URL: ${result.url}`;
+  }
+
+  return text;
 }
 
 /**

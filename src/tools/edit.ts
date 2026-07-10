@@ -4,16 +4,14 @@
  */
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { downloadAndSaveVideo, pollVideoResult, extractApiErrorMessage } from '../utils/video.js';
+import { runVideoJob, formatVideoResult } from '../utils/video.js';
 import {
   normalizeAndValidatePath,
-  getDisplayPath,
   generateUniqueFilePath,
 } from '../utils/path.js';
 import { debugLog } from '../utils/debug.js';
 import type {
   EditVideoParams,
-  XAIVideoGenerationRequest,
   VideoGenerationResult,
 } from '../types/tools.js';
 import {
@@ -21,7 +19,6 @@ import {
   MAX_EDIT_VIDEO_DURATION,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
-  ticksToUsd,
 } from '../types/tools.js';
 
 const XAI_EDIT_ENDPOINT = 'https://api.x.ai/v1/videos/edits';
@@ -82,86 +79,14 @@ export async function editVideo(
 
     debugLog('Request body:', requestBody);
 
-    // Call xAI Edit API
-    const response = await fetch(XAI_EDIT_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage =
-        extractApiErrorMessage(errorData) ||
-        `HTTP ${response.status}: ${response.statusText}`;
-
-      debugLog('API error:', errorData);
-
-      if (response.status === 401) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Authentication failed. Please check your XAI_API_KEY environment variable.'
-        );
-      } else if (response.status === 403) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Access denied. Please check your API key permissions.'
-        );
-      } else if (response.status === 400) {
-        throw new McpError(ErrorCode.InvalidRequest, `Bad request: ${errorMessage}`);
-      } else if (response.status === 429) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          'Rate limit exceeded. Please wait and try again.'
-        );
-      } else {
-        throw new McpError(
-          ErrorCode.InternalError,
-          `API error (${response.status}): ${errorMessage}`
-        );
-      }
-    }
-
-    const requestData = (await response.json()) as XAIVideoGenerationRequest;
-
-    debugLog('Video edit request accepted:', requestData);
-
-    if (!requestData.request_id) {
-      throw new McpError(ErrorCode.InternalError, 'No request_id returned from API');
-    }
-
-    // Poll for result
-    debugLog('Starting polling for video edit result...');
-    const result = await pollVideoResult(
+    return await runVideoJob(
+      XAI_EDIT_ENDPOINT,
       apiKey,
-      requestData.request_id,
+      requestBody,
+      normalizedPath,
       pollInterval,
       maxPollAttempts
     );
-
-    if (!result.video?.url) {
-      throw new McpError(ErrorCode.InternalError, 'No video URL in completed response');
-    }
-
-    // Download and save video
-    await downloadAndSaveVideo(result.video.url, normalizedPath);
-
-    const displayPath = getDisplayPath(normalizedPath);
-
-    debugLog(`Edited video saved to: ${displayPath}`);
-
-    return {
-      success: true,
-      url: result.video.url,
-      output_path: normalizedPath,
-      duration: result.video.duration,
-      request_id: requestData.request_id,
-      cost_in_usd_ticks: result.usage?.cost_in_usd_ticks,
-    };
   } catch (error: any) {
     debugLog('Error editing video:', error);
 
@@ -180,25 +105,9 @@ export async function editVideo(
  * Format result for MCP response
  */
 export function formatEditResult(result: VideoGenerationResult): string {
-  if (!result.success) {
-    return `Video editing failed: ${result.error}`;
+  let text = formatVideoResult(result, { action: 'editing', verb: 'edited' });
+  if (result.success) {
+    text += `\n\nNote: The edited video has the same duration as the original video (max ${MAX_EDIT_VIDEO_DURATION} seconds).`;
   }
-
-  const displayPath = result.output_path ? getDisplayPath(result.output_path) : 'unknown';
-
-  let text = `Video edited successfully: ${displayPath}`;
-  text += `\n\nDetails:`;
-  text += `\n  - Request ID: ${result.request_id}`;
-  if (result.duration) {
-    text += `\n  - Duration: ${result.duration} seconds`;
-  }
-  if (result.cost_in_usd_ticks !== undefined) {
-    text += `\n  - Cost: $${ticksToUsd(result.cost_in_usd_ticks).toFixed(4)}`;
-  }
-  if (result.url) {
-    text += `\n  - Video URL: ${result.url}`;
-  }
-  text += `\n\nNote: The edited video has the same duration as the original video (max ${MAX_EDIT_VIDEO_DURATION} seconds).`;
-
   return text;
 }

@@ -40,7 +40,7 @@ if (!apiKey) {
 const server = new Server(
   {
     name: 'grok-imagine-video-mcp-server',
-    version: '1.3.0',
+    version: '1.4.0',
   },
   {
     capabilities: {
@@ -58,7 +58,7 @@ const TOOLS = [
       'Supports text-to-video (T2V), image-to-video (I2V), and reference-to-video (R2V). ' +
       'Supports aspect ratios: 16:9, 4:3, 1:1, 9:16, 3:4, 3:2, 2:3. ' +
       'Video duration: 1-15 seconds (default 8). Resolution: 480p, 720p, or 1080p. ' +
-      'For image-to-video, provide image_url or image_path. ' +
+      'For image-to-video, provide image_url, image_path, or image_file_id. ' +
       'For reference-to-video, provide reference_images.',
     inputSchema: {
       type: 'object',
@@ -103,13 +103,19 @@ const TOOLS = [
           description:
             'Local image file path for image-to-video generation. ' +
             'The image is sent to the API as a base64 data URL. ' +
-            'Cannot be used together with image_url.',
+            'Cannot be used together with image_url or image_file_id.',
+        },
+        image_file_id: {
+          type: 'string',
+          description:
+            'File ID from the xAI Files API for image-to-video generation. ' +
+            'Cannot be used together with image_url or image_path.',
         },
         reference_images: {
           type: 'array',
           description:
             'Reference images for reference-to-video (R2V) generation, used as ' +
-            'style/content references. Cannot be combined with image_url/image_path.',
+            'style/content references. Cannot be combined with image_url/image_path/image_file_id.',
           items: {
             type: 'object',
             properties: {
