@@ -32,7 +32,11 @@ export type Resolution = (typeof RESOLUTIONS)[number];
 // Maximum local image file size sent inline as a base64 data URL (I2V/R2V).
 // Guards the long-running server against multi-hundred-MB request bodies the
 // API would reject anyway (base64 adds ~33% on top of the file size).
+// Larger local images are uploaded via the xAI Files API instead.
 export const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+
+// Maximum file size accepted by the xAI Files API (per official docs)
+export const MAX_UPLOAD_FILE_BYTES = 48 * 1024 * 1024;
 
 // Duration constraints
 export const MIN_DURATION = 1;
@@ -96,8 +100,10 @@ export interface GenerateVideoParams {
 export interface EditVideoParams {
   /** Text prompt describing the edit to apply */
   prompt: string;
-  /** Source video URL (max 8.7 seconds). Exactly one of video_url / video_file_id. */
+  /** Source video URL (max 8.7 seconds). Exactly one of video_url / video_path / video_file_id. */
   video_url?: string;
+  /** Local video file path (.mp4, uploaded via the xAI Files API) */
+  video_path?: string;
   /** File ID of the source video from the xAI Files API */
   video_file_id?: string;
   /** Output file path (optional, default: edited_video.mp4) */
@@ -110,8 +116,10 @@ export interface EditVideoParams {
 export interface ExtendVideoParams {
   /** Prompt describing what should happen next in the video */
   prompt: string;
-  /** Source video URL (public URL or base64 data URL, .mp4). Exactly one of video_url / video_file_id. */
+  /** Source video URL (public URL or base64 data URL, .mp4). Exactly one of video_url / video_path / video_file_id. */
   video_url?: string;
+  /** Local video file path (.mp4, uploaded via the xAI Files API) */
+  video_path?: string;
   /** File ID of the source video from the xAI Files API */
   video_file_id?: string;
   /** Output file path (optional, default: extended_video.mp4) */

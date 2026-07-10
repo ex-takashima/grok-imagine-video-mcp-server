@@ -302,6 +302,7 @@ export class BatchManager {
           result = await editVideo(this.apiKey, {
             prompt: job.prompt!,
             video_url: job.video_url,
+            video_path: job.video_path,
             video_file_id: job.video_file_id,
             output_path: outputPath,
             model: job.model || config.default_model,
@@ -311,6 +312,7 @@ export class BatchManager {
           result = await extendVideo(this.apiKey, {
             prompt: job.prompt!,
             video_url: job.video_url,
+            video_path: job.video_path,
             video_file_id: job.video_file_id,
             output_path: outputPath,
             model: job.model || config.default_model,

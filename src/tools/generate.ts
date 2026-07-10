@@ -4,8 +4,8 @@
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { stat, readFile } from 'fs/promises';
-import { extname } from 'path';
 import { runVideoJob, formatVideoResult } from '../utils/video.js';
+import { uploadFileToXai, getImageMimeType } from '../utils/files.js';
 import {
   normalizeAndValidatePath,
   generateUniqueFilePath,
@@ -31,41 +31,15 @@ import {
 
 const XAI_API_ENDPOINT = 'https://api.x.ai/v1/videos/generations';
 
-// Image formats we can label correctly in a data URL. Unlike the old R2 flow
-// (where xAI fetched raw bytes from a URL and could content-sniff them), the
-// MIME type declared here travels inside the payload, so unknown extensions
-// must be rejected client-side instead of guessing.
-const IMAGE_MIME_TYPES: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.tiff': 'image/tiff',
-  '.tif': 'image/tiff',
-};
-
 /**
- * Get MIME type for image files
+ * Resolve a local image file to an API image source: small files are inlined
+ * as a base64 data URL; files above MAX_IMAGE_FILE_BYTES are uploaded to the
+ * xAI Files API and referenced by file_id.
  */
-function getImageMimeType(filePath: string): string {
-  const ext = extname(filePath).toLowerCase();
-  const mimeType = IMAGE_MIME_TYPES[ext];
-  if (!mimeType) {
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      `Unsupported image format "${ext || '(no extension)'}": ${filePath}. ` +
-        `Supported extensions: ${Object.keys(IMAGE_MIME_TYPES).join(', ')}`
-    );
-  }
-  return mimeType;
-}
-
-/**
- * Read a local image file and return it as a base64 data URL.
- */
-async function imagePathToDataUrl(imagePath: string): Promise<string> {
+async function resolveLocalImage(
+  apiKey: string,
+  imagePath: string
+): Promise<{ url: string } | { file_id: string }> {
   const mimeType = getImageMimeType(imagePath);
 
   let fileSize: number;
@@ -79,19 +53,16 @@ async function imagePathToDataUrl(imagePath: string): Promise<string> {
   }
 
   if (fileSize > MAX_IMAGE_FILE_BYTES) {
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      `Image file too large: ${imagePath} (${(fileSize / (1024 * 1024)).toFixed(1)} MB). ` +
-        `Local images are sent inline as base64; maximum is ${MAX_IMAGE_FILE_BYTES / (1024 * 1024)} MB. ` +
-        `Use image_url with a hosted image for larger files.`
-    );
+    debugLog('Image exceeds inline base64 limit, uploading via Files API:', imagePath);
+    const uploaded = await uploadFileToXai(apiKey, imagePath, mimeType);
+    return { file_id: uploaded.file_id };
   }
 
   debugLog('Reading local image for base64 encoding:', imagePath);
   const fileBuffer = await readFile(imagePath);
   const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
   debugLog('Image converted to data URL:', { mimeType, size: fileBuffer.length });
-  return dataUrl;
+  return { url: dataUrl };
 }
 
 export async function generateVideo(
@@ -177,11 +148,14 @@ export async function generateVideo(
     );
   }
 
-  // Resolve final image URL (convert local file to base64 data URL if image_path is provided)
-  let finalImageUrl = image_url;
-
-  if (image_path) {
-    finalImageUrl = await imagePathToDataUrl(image_path);
+  // Resolve the I2V image source (URL, Files API ID, or local file)
+  let imageSource: { url: string } | { file_id: string } | undefined;
+  if (image_file_id) {
+    imageSource = { file_id: image_file_id };
+  } else if (image_path) {
+    imageSource = await resolveLocalImage(apiKey, image_path);
+  } else if (image_url) {
+    imageSource = { url: image_url };
   }
 
   // Resolve reference images (R2V): each may be a url, a local path, or a file_id
@@ -193,7 +167,7 @@ export async function generateVideo(
       } else if (ref.url) {
         resolvedReferenceImages.push({ url: ref.url });
       } else if (ref.path) {
-        resolvedReferenceImages.push({ url: await imagePathToDataUrl(ref.path) });
+        resolvedReferenceImages.push(await resolveLocalImage(apiKey, ref.path));
       } else {
         throw new McpError(
           ErrorCode.InvalidParams,
@@ -220,11 +194,8 @@ export async function generateVideo(
     }
 
     // Add image for image-to-video generation (URL/data URL or Files API ID)
-    if (image_file_id) {
-      requestBody.image = { file_id: image_file_id };
-      debugLog('Image-to-video mode enabled (file_id)');
-    } else if (finalImageUrl) {
-      requestBody.image = { url: finalImageUrl };
+    if (imageSource) {
+      requestBody.image = imageSource;
       debugLog('Image-to-video mode enabled');
     }
 

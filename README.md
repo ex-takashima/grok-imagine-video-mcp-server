@@ -110,7 +110,7 @@ grok-imagine-video-mcp-server
 | `aspect_ratio` | string | No | アスペクト比（デフォルト: 16:9） |
 | `resolution` | string | No | 解像度（480p/720p/1080p、デフォルト: 720p） |
 | `image_url` | string | No | Image-to-Video用の入力画像URL |
-| `image_path` | string | No | ローカル画像ファイルパス（base64 data URLとしてAPIに送信） |
+| `image_path` | string | No | ローカル画像ファイルパス（base64 data URLとして送信。10MB超はFiles API経由で自動アップロード） |
 | `image_file_id` | string | No | xAI Files API の File ID（Image-to-Video用） |
 | `reference_images` | array | No | Reference-to-Video用の参照画像（各要素は `url` / `path` / `file_id` のいずれか） |
 
@@ -124,6 +124,7 @@ grok-imagine-video-mcp-server
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 編集内容の説明 |
 | `video_url` | string | No* | 編集する動画のURL（公開アクセス可能、最大8.7秒） |
+| `video_path` | string | No* | ローカル動画ファイルパス（.mp4、Files API 経由で自動アップロード） |
 | `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイルパス（デフォルト: edited_video.mp4） |
 | `model` | string | No | モデル（デフォルト: grok-imagine-video） |
@@ -138,10 +139,19 @@ grok-imagine-video-mcp-server
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 続きで何が起こるかの説明 |
 | `video_url` | string | No* | 延長する動画のURL（公開アクセス可能 or base64 data URL、.mp4） |
+| `video_path` | string | No* | ローカル動画ファイルパス（.mp4、Files API 経由で自動アップロード） |
 | `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイルパス（デフォルト: extended_video.mp4） |
 | `model` | string | No | モデル（デフォルト: grok-imagine-video） |
 | `duration` | number | No | 延長セグメントの長さ（1-10秒、デフォルト: 6） |
+
+### upload_file
+
+ローカルの画像・動画ファイルを xAI Files API にアップロードし、`file_id` を取得します。ファイルは非公開のまま保存され、`image_file_id` / `reference_images[].file_id` / `video_file_id` として再利用できます（同じファイルを何度も送り直す必要がありません）。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `file_path` | string | Yes | アップロードするファイルのパス（画像: jpg/jpeg/png/gif/webp/bmp/tiff、動画: mp4、最大 48MB） |
 
 ## バッチ処理 CLI
 
@@ -293,7 +303,7 @@ npx grok-imagine-video-batch --version
 |-----------|-----|------|------|
 | `prompt` | string | Yes | アニメーションの説明 |
 | `image_url` | string | No* | 入力画像のURL（公開アクセス可能） |
-| `image_path` | string | No* | ローカル画像ファイルパス（base64 data URLとしてAPIに送信） |
+| `image_path` | string | No* | ローカル画像ファイルパス（base64 data URLとして送信。10MB超はFiles API経由で自動アップロード） |
 | `image_file_id` | string | No* | xAI Files API の File ID |
 | `output_path` | string | No | 出力ファイル名 |
 | `duration` | number | No | 動画長（1-15秒） |
@@ -337,6 +347,7 @@ npx grok-imagine-video-batch --version
 |-----------|-----|------|------|
 | `prompt` | string | Yes | 編集内容の説明 |
 | `video_url` | string | No* | 編集する動画のURL（最大8.7秒） |
+| `video_path` | string | No* | ローカル動画ファイルパス（.mp4、Files API 経由で自動アップロード） |
 | `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイル名 |
 
@@ -357,11 +368,12 @@ npx grok-imagine-video-batch --version
 | `operation` | string | Yes | `"extend"` を指定（省略するとソース動画付きは編集扱い） |
 | `prompt` | string | Yes | 続きで何が起こるかの説明 |
 | `video_url` | string | No* | 延長する動画のURL |
+| `video_path` | string | No* | ローカル動画ファイルパス（.mp4、Files API 経由で自動アップロード） |
 | `video_file_id` | string | No* | xAI Files API の File ID（*いずれか1つを指定） |
 | `output_path` | string | No | 出力ファイル名 |
 | `duration` | number | No | 延長セグメントの長さ（1-10秒、デフォルト6） |
 
-> `video_url` または `video_file_id` を持つジョブは既定で編集（edit）として扱われます。延長したい場合は `"operation": "extend"` を明示してください。
+> `video_url` / `video_path` / `video_file_id` を持つジョブは既定で編集（edit）として扱われます。延長したい場合は `"operation": "extend"` を明示してください。
 
 ### グローバル設定
 

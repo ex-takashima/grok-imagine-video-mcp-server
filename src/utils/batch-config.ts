@@ -33,7 +33,7 @@ import {
  */
 export function getJobOperation(job: BatchJobConfig): BatchJobOperation {
   if (job.operation) return job.operation;
-  if (job.video_url || job.video_file_id) return 'edit';
+  if (job.video_url || job.video_path || job.video_file_id) return 'edit';
   return 'generate';
 }
 
@@ -238,15 +238,16 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
     }
   }
 
-  // Edit/extend jobs require a source video (URL or Files API ID, exactly one)
-  if (isVideoSourceJob && !job.video_url && !job.video_file_id) {
+  // Edit/extend jobs require a source video (URL, local path, or Files API ID — exactly one)
+  const videoSourceCount = [job.video_url, job.video_path, job.video_file_id].filter(Boolean).length;
+  if (isVideoSourceJob && videoSourceCount === 0) {
     throw new BatchConfigError(
-      `${prefix}: video_url or video_file_id is required for ${operation} jobs`
+      `${prefix}: video_url, video_path, or video_file_id is required for ${operation} jobs`
     );
   }
-  if (job.video_url && job.video_file_id) {
+  if (videoSourceCount > 1) {
     throw new BatchConfigError(
-      `${prefix}: Specify only one of video_url or video_file_id`
+      `${prefix}: Specify only one of video_url, video_path, or video_file_id`
     );
   }
 
@@ -298,9 +299,9 @@ function validateJobConfig(job: BatchJobConfig, index: number): void {
 
   // Mutually exclusive sources
   // (an explicit "operation": "generate" would otherwise silently ignore the source video)
-  if (!isVideoSourceJob && (job.video_url || job.video_file_id)) {
+  if (!isVideoSourceJob && videoSourceCount > 0) {
     throw new BatchConfigError(
-      `${prefix}: video_url/video_file_id cannot be specified for generate jobs. Use "operation": "edit" or "extend".`
+      `${prefix}: video_url/video_path/video_file_id cannot be specified for generate jobs. Use "operation": "edit" or "extend".`
     );
   }
   if (isVideoSourceJob && (imageToVideo || referenceToVideo)) {

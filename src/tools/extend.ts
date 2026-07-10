@@ -5,6 +5,7 @@
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { runVideoJob, formatVideoResult } from '../utils/video.js';
+import { resolveLocalVideo } from '../utils/files.js';
 import {
   normalizeAndValidatePath,
   generateUniqueFilePath,
@@ -36,6 +37,7 @@ export async function extendVideo(
   const {
     prompt,
     video_url,
+    video_path,
     video_file_id,
     output_path = 'extended_video.mp4',
     model = 'grok-imagine-video',
@@ -50,17 +52,18 @@ export async function extendVideo(
     );
   }
 
-  // Validate video source (URL or Files API ID, exactly one)
-  if (!video_url && !video_file_id) {
+  // Validate video source (URL, local path, or Files API ID — exactly one)
+  const videoSourceCount = [video_url, video_path, video_file_id].filter(Boolean).length;
+  if (videoSourceCount === 0) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'Either video_url or video_file_id is required for video extension'
+      'One of video_url, video_path, or video_file_id is required for video extension'
     );
   }
-  if (video_url && video_file_id) {
+  if (videoSourceCount > 1) {
     throw new McpError(
       ErrorCode.InvalidParams,
-      'Specify only one of video_url or video_file_id.'
+      'Specify only one of video_url, video_path, or video_file_id.'
     );
   }
 
@@ -85,12 +88,19 @@ export async function extendVideo(
   try {
     debugLog('Calling xAI Video Extension API...');
 
+    // Resolve video source (local files are uploaded via the Files API)
+    const videoSource = video_file_id
+      ? { file_id: video_file_id }
+      : video_path
+        ? await resolveLocalVideo(apiKey, video_path)
+        : { url: video_url };
+
     // Build request body according to /v1/videos/extensions spec
     const requestBody: Record<string, any> = {
       model,
       prompt,
       duration,
-      video: video_file_id ? { file_id: video_file_id } : { url: video_url },
+      video: videoSource,
     };
 
     debugLog('Request body:', requestBody);

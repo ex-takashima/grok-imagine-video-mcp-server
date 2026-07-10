@@ -47,6 +47,8 @@ export interface BatchJobConfig {
   // Edit / extend options
   /** URL of source video for editing (max 8.7 seconds) or extension */
   video_url?: string;
+  /** Local video file path (.mp4, uploaded via the xAI Files API) */
+  video_path?: string;
   /** File ID of the source video from the xAI Files API (alternative to video_url) */
   video_file_id?: string;
 }

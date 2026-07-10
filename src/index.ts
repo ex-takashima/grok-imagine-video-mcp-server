@@ -19,6 +19,7 @@ import * as dotenv from 'dotenv';
 import { generateVideo, formatGenerateResult } from './tools/generate.js';
 import { editVideo, formatEditResult } from './tools/edit.js';
 import { extendVideo, formatExtendResult } from './tools/extend.js';
+import { uploadFileToXai, getUploadMimeType } from './utils/files.js';
 import { debugLog } from './utils/debug.js';
 
 // Load environment variables
@@ -40,7 +41,7 @@ if (!apiKey) {
 const server = new Server(
   {
     name: 'grok-imagine-video-mcp-server',
-    version: '1.5.0',
+    version: '1.6.0',
   },
   {
     capabilities: {
@@ -102,7 +103,8 @@ const TOOLS = [
           type: 'string',
           description:
             'Local image file path for image-to-video generation. ' +
-            'The image is sent to the API as a base64 data URL. ' +
+            'Sent as a base64 data URL; files over 10 MB are uploaded via the ' +
+            'xAI Files API automatically (max 48 MB). ' +
             'Cannot be used together with image_url or image_file_id.',
         },
         image_file_id: {
@@ -158,13 +160,19 @@ const TOOLS = [
           type: 'string',
           description:
             'URL of the source video to edit (must be publicly accessible, max 8.7 seconds). ' +
-            'Provide exactly one of video_url or video_file_id.',
+            'Provide exactly one of video_url, video_path, or video_file_id.',
+        },
+        video_path: {
+          type: 'string',
+          description:
+            'Local video file path (.mp4). Uploaded to the xAI Files API automatically. ' +
+            'Provide exactly one of video_url, video_path, or video_file_id.',
         },
         video_file_id: {
           type: 'string',
           description:
             'File ID of the source video from the xAI Files API. ' +
-            'Provide exactly one of video_url or video_file_id.',
+            'Provide exactly one of video_url, video_path, or video_file_id.',
         },
         output_path: {
           type: 'string',
@@ -197,13 +205,19 @@ const TOOLS = [
           type: 'string',
           description:
             'URL of the source video to extend (public URL or base64 data URL, .mp4). ' +
-            'Provide exactly one of video_url or video_file_id.',
+            'Provide exactly one of video_url, video_path, or video_file_id.',
+        },
+        video_path: {
+          type: 'string',
+          description:
+            'Local video file path (.mp4). Uploaded to the xAI Files API automatically. ' +
+            'Provide exactly one of video_url, video_path, or video_file_id.',
         },
         video_file_id: {
           type: 'string',
           description:
             'File ID of the source video from the xAI Files API. ' +
-            'Provide exactly one of video_url or video_file_id.',
+            'Provide exactly one of video_url, video_path, or video_file_id.',
         },
         output_path: {
           type: 'string',
@@ -223,6 +237,26 @@ const TOOLS = [
       },
       // video source (video_url XOR video_file_id) is validated server-side
       required: ['prompt'],
+    },
+  },
+  {
+    name: 'upload_file',
+    description:
+      'Upload a local image or video file to the xAI Files API and get a file_id. ' +
+      'The file stays private; the returned file_id can be used as input for ' +
+      'generate_video (image_file_id, reference_images[].file_id), edit_video, and ' +
+      'extend_video (video_file_id). Useful for reusing the same asset across ' +
+      'multiple calls without re-uploading. ' +
+      'Supported: images (jpg/jpeg/png/gif/webp/bmp/tiff) and videos (mp4), max 48 MB.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_path: {
+          type: 'string',
+          description: 'Local path of the image or video file to upload',
+        },
+      },
+      required: ['file_path'],
     },
   },
 ];
@@ -256,6 +290,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'extend_video': {
         const result = await extendVideo(apiKey!, args as any);
         const text = formatExtendResult(result);
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'upload_file': {
+        const filePath = (args as any)?.file_path;
+        if (!filePath || typeof filePath !== 'string') {
+          throw new McpError(ErrorCode.InvalidParams, 'file_path is required');
+        }
+        const mimeType = getUploadMimeType(filePath);
+        const uploaded = await uploadFileToXai(apiKey!, filePath, mimeType);
+        const text =
+          `File uploaded successfully to the xAI Files API.\n\nDetails:\n` +
+          `  - File ID: ${uploaded.file_id}\n` +
+          `  - Filename: ${uploaded.filename}\n` +
+          `  - Size: ${(uploaded.bytes / (1024 * 1024)).toFixed(2)} MB\n\n` +
+          `Use this file_id as image_file_id / reference_images[].file_id (images) ` +
+          `or video_file_id (videos) in subsequent calls.`;
         return { content: [{ type: 'text', text }] };
       }
 
