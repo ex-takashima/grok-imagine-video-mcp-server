@@ -41,7 +41,7 @@ if (!apiKey) {
 const server = new Server(
   {
     name: 'grok-imagine-video-mcp-server',
-    version: '1.6.0',
+    version: '1.7.0',
   },
   {
     capabilities: {
@@ -58,7 +58,8 @@ const TOOLS = [
       'Generate a new video using xAI Grok Imagine Video API (grok-imagine-video). ' +
       'Supports text-to-video (T2V), image-to-video (I2V), and reference-to-video (R2V). ' +
       'Supports aspect ratios: 16:9, 4:3, 1:1, 9:16, 3:4, 3:2, 2:3. ' +
-      'Video duration: 1-15 seconds (default 8). Resolution: 480p, 720p, or 1080p. ' +
+      'Video duration: 1-15 seconds (default 8). Resolution: 480p, 720p, or 1080p ' +
+      '(1080p only with model grok-imagine-video-1.5 for image-to-video). ' +
       'For image-to-video, provide image_url, image_path, or image_file_id. ' +
       'For reference-to-video, provide reference_images.',
     inputSchema: {
@@ -93,7 +94,9 @@ const TOOLS = [
         resolution: {
           type: 'string',
           enum: ['480p', '720p', '1080p'],
-          description: 'Resolution of the generated video (default: 720p)',
+          description:
+            'Resolution of the generated video (default: 720p). 1080p is only ' +
+            'available with model grok-imagine-video-1.5 for image-to-video.',
         },
         image_url: {
           type: 'string',

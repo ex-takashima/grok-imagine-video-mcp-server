@@ -26,6 +26,7 @@ import {
   DEFAULT_EXTENSION_DURATION,
   DEFAULT_POLL_INTERVAL,
   DEFAULT_MAX_POLL_ATTEMPTS,
+  type Model,
 } from '../types/tools.js';
 
 /**
@@ -61,16 +62,16 @@ class Semaphore {
 }
 
 /**
- * Cost per second of video by operation type (estimated)
- * Note: These are placeholder values - actual pricing should be verified with xAI
+ * Cost per second of generated video by model (official xAI pricing as of 2026-07).
+ * The rate depends on the model only, not the operation type. Actual billed cost
+ * is reported per job via usage.cost_in_usd_ticks.
  */
-const VIDEO_COSTS = {
-  generation: { perSecond: 0.05 },
-  image_to_video: { perSecond: 0.05, imageBonus: 0.01 },
-  reference_to_video: { perSecond: 0.05, imageBonus: 0.01 },
-  edit: { perSecond: 0.07 },
-  extension: { perSecond: 0.05 },
+const MODEL_COSTS_PER_SECOND: Record<Model, number> = {
+  'grok-imagine-video': 0.05,
+  'grok-imagine-video-1.5': 0.08,
 };
+
+const FALLBACK_MODEL: Model = 'grok-imagine-video';
 
 /**
  * BatchManager handles batch execution with concurrency control
@@ -87,13 +88,14 @@ export class BatchManager {
    */
   estimateBatchCost(config: BatchConfig): CostEstimate {
     const breakdown: CostEstimate['breakdown'] = [];
-    const typeCounts: Record<string, { count: number; totalDuration: number }> = {
-      generation: { count: 0, totalDuration: 0 },
-      image_to_video: { count: 0, totalDuration: 0 },
-      reference_to_video: { count: 0, totalDuration: 0 },
-      edit: { count: 0, totalDuration: 0 },
-      extension: { count: 0, totalDuration: 0 },
-    };
+    const typeCounts: Record<string, { count: number; totalDuration: number; totalCost: number }> =
+      {
+        generation: { count: 0, totalDuration: 0, totalCost: 0 },
+        image_to_video: { count: 0, totalDuration: 0, totalCost: 0 },
+        reference_to_video: { count: 0, totalDuration: 0, totalCost: 0 },
+        edit: { count: 0, totalDuration: 0, totalCost: 0 },
+        extension: { count: 0, totalDuration: 0, totalCost: 0 },
+      };
 
     const defaultDuration = config.default_duration ?? DEFAULT_DURATION;
 
@@ -121,8 +123,12 @@ export class BatchManager {
         duration = job.duration ?? defaultDuration;
       }
 
+      const model = (job.model ?? config.default_model ?? FALLBACK_MODEL) as Model;
+      const perSecond = MODEL_COSTS_PER_SECOND[model] ?? MODEL_COSTS_PER_SECOND[FALLBACK_MODEL];
+
       typeCounts[type].count++;
       typeCounts[type].totalDuration += duration;
+      typeCounts[type].totalCost += perSecond * duration;
     }
 
     let totalMin = 0;
@@ -132,12 +138,7 @@ export class BatchManager {
     for (const [type, data] of Object.entries(typeCounts)) {
       if (data.count === 0) continue;
 
-      const costs = VIDEO_COSTS[type as keyof typeof VIDEO_COSTS];
-      let cost = costs.perSecond * data.totalDuration;
-
-      if (type === 'image_to_video' || type === 'reference_to_video') {
-        cost += (costs as any).imageBonus * data.count;
-      }
+      const cost = data.totalCost;
 
       breakdown.push({
         type: type as CostEstimate['breakdown'][number]['type'],

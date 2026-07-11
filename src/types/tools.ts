@@ -23,9 +23,9 @@ export const ASPECT_RATIOS = [
 
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 
-// Supported resolutions. 1080p is NOT yet available from the xAI API (every
-// model/mode returns "1080p video resolution is not available for this model.");
-// it is kept here only for forward compatibility when xAI ships it.
+// Supported resolutions. 1080p is only supported on grok-imagine-video-1.5 for
+// image-to-video (per official docs); every other model/mode combination returns
+// "1080p video resolution is not available for this model.".
 export const RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 export type Resolution = (typeof RESOLUTIONS)[number];
 

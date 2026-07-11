@@ -26,11 +26,11 @@ npx grok-imagine-video-mcp-server
 - **動画延長（Extension）**: 既存動画の続きを生成して延長
 - **バッチ処理**: CLIで複数動画を一括処理
 - 多様なアスペクト比をサポート（16:9, 4:3, 1:1, 9:16 など）
-- 解像度: 480p, 720p（1080p は API 未提供・将来対応用に予約）
+- 解像度: 480p, 720p, 1080p（1080p は `grok-imagine-video-1.5` × Image-to-Video 限定）
 - 動画長: 1〜15秒（デフォルト8秒。編集時は元動画と同じ長さ、延長は1〜10秒）
 - 非同期処理対応（ポーリングによる結果取得、進捗・コスト表示）
 
-> **grok-imagine-video 1.5 対応**: Reference-to-Video、動画延長、構造化エラー/進捗、実コスト（`cost_in_usd_ticks`）表示に対応しています。1080p は xAI API 側が未提供のため現時点では利用できません。
+> **grok-imagine-video 1.5 対応**: Reference-to-Video、動画延長、構造化エラー/進捗、実コスト（`cost_in_usd_ticks`）表示に対応しています。1080p は `grok-imagine-video-1.5` の Image-to-Video に限り利用できます。
 
 ## サポートモデル
 
@@ -42,7 +42,7 @@ npx grok-imagine-video-mcp-server
 > **モデルと機能の対応について（実機検証済み）**:
 > Reference-to-Video・動画延長・Text-to-Video はいずれも基本モデル `grok-imagine-video` で動作します（公式ドキュメントの例も全て `grok-imagine-video` を使用）。pinned 版の `grok-imagine-video-1.5` は T2V/R2V/延長を受け付けないため、通常はデフォルトの `grok-imagine-video` を使用してください。
 >
-> **1080p について**: xAI の動画生成 API は現状 **`480p` / `720p` のみ**で、**720p が上限**です（[公式: Video Generation](https://docs.x.ai/developers/model-capabilities/video/generation)）。`1080p` を指定すると `1080p video resolution is not available for this model.` が返ります。これは**アカウントの権限や Grok のサブスク（SuperGrok 等）とは無関係**で、API がまだ 1080p を提供していないためです（1080p は将来のロードマップ項目）。`720p` / `480p` を使用してください。なお xAI の API 課金は消費者向け Grok サブスクとは別系統（前払いクレジット/請求）で、サブスク加入で API 機能が解放されることはありません。
+> **1080p について**: 公式ドキュメント（[Video Generation](https://docs.x.ai/developers/model-capabilities/video/generation)）によると、1080p は **`grok-imagine-video-1.5` の Image-to-Video に限り**利用できます。それ以外のモデル×モードの組み合わせで `1080p` を指定すると `1080p video resolution is not available for this model.` が返ります。これは**アカウントの権限や Grok のサブスク（SuperGrok 等）とは無関係**です。なお xAI の API 課金は消費者向け Grok サブスクとは別系統（前払いクレジット/請求）で、サブスク加入で API 機能が解放されることはありません。
 
 ## 必要条件
 
@@ -430,7 +430,7 @@ npx grok-imagine-video-batch --version
 
 | 解像度 | 説明 |
 |--------|------|
-| `1080p` | フルHD画質（**API 未提供**。指定すると "1080p video resolution is not available for this model." になります。将来対応用） |
+| `1080p` | フルHD画質（**`grok-imagine-video-1.5` × Image-to-Video 限定**。他の組み合わせでは "1080p video resolution is not available for this model." になります） |
 | `720p` | HD画質（デフォルト） |
 | `480p` | 標準画質 |
 
